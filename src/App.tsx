@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type CSSProperties, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties, type FormEvent, type MouseEvent as ReactMouseEvent } from "react";
 import {
   copyEventContent,
   eventsForDate,
@@ -26,6 +26,10 @@ import {
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 const EVENT_COLORS = ["#78a88f", "#83a9c2", "#b49ac7", "#d2a36f", "#d7867f", "#92a86c"];
+
+type CalendarContextMenu =
+  | { kind: "event"; event: CalendarEvent; x: number; y: number }
+  | { kind: "day"; date: string; x: number; y: number };
 
 function styleForEvent(style: EventStyle): CSSProperties {
   return {
@@ -60,6 +64,8 @@ function App() {
   const [editing, setEditing] = useState<CalendarEvent | "new" | null>(null);
   const [copiedContent, setCopiedContent] = useState<EventContent | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [contextMenu, setContextMenu] = useState<CalendarContextMenu | null>(null);
+  const [agendaDate, setAgendaDate] = useState<string | null>(null);
   const [toast, setToast] = useState("");
   const [loadError, setLoadError] = useState("");
 
@@ -86,6 +92,22 @@ function App() {
     return () => window.clearTimeout(timer);
   }, [toast]);
 
+  useEffect(() => {
+    if (!contextMenu) return;
+    const closeMenu = () => setContextMenu(null);
+    const closeOnEscape = (keyboardEvent: KeyboardEvent) => {
+      if (keyboardEvent.key === "Escape") closeMenu();
+    };
+    window.addEventListener("click", closeMenu);
+    window.addEventListener("keydown", closeOnEscape);
+    window.addEventListener("resize", closeMenu);
+    return () => {
+      window.removeEventListener("click", closeMenu);
+      window.removeEventListener("keydown", closeOnEscape);
+      window.removeEventListener("resize", closeMenu);
+    };
+  }, [contextMenu]);
+
   const persist = useCallback(async (next: AppData, message?: string) => {
     try {
       await saveAppData(next);
@@ -102,7 +124,7 @@ function App() {
     [monthCells],
   );
   const todayEvents = useMemo(() => (data ? eventsForDate(data.events, todayKey) : []), [data, todayKey]);
-  const upcoming = useMemo(() => (data ? upcomingEvents(data.events, today, 7).slice(0, 7) : []), [data, today]);
+  const upcoming = useMemo(() => (data ? upcomingEvents(data.events, today, 7) : []), [data, today]);
 
   const openNewEvent = (date = selectedDate) => {
     setSelectedDate(date);
@@ -137,7 +159,35 @@ function App() {
   const copyEvent = (event: CalendarEvent) => {
     setCopiedContent(copyEventContent(event));
     setEditing(null);
+    setContextMenu(null);
     setToast(`「${event.title.trim()}」の内容をコピーしました`);
+  };
+
+  const pasteCopiedEvent = async (date: string) => {
+    if (!copiedContent) return;
+    setContextMenu(null);
+    await saveEvent(pasteEventContent(createDraft(date), copiedContent));
+  };
+
+  const openContextMenu = (
+    mouseEvent: ReactMouseEvent,
+    target: { kind: "event"; event: CalendarEvent } | { kind: "day"; date: string },
+  ) => {
+    mouseEvent.preventDefault();
+    mouseEvent.stopPropagation();
+    const menuWidth = 224;
+    const menuHeight = target.kind === "event" ? 126 : 142;
+    setContextMenu({
+      ...target,
+      x: Math.max(8, Math.min(mouseEvent.clientX, window.innerWidth - menuWidth - 8)),
+      y: Math.max(8, Math.min(mouseEvent.clientY, window.innerHeight - menuHeight - 8)),
+    });
+  };
+
+  const selectDate = (date: string, events: CalendarEvent[]) => {
+    setSelectedDate(date);
+    setContextMenu(null);
+    if (events.length > 0) setAgendaDate(date);
   };
 
   const updateSettings = async (settings: AppData["settings"]) => {
@@ -264,39 +314,42 @@ function App() {
               const events = eventsForDate(data.events, cell.dateKey);
               const selected = selectedDate === cell.dateKey;
               const holidayName = holidayMap.get(cell.dateKey);
+              const visibleEvents = events.length > 2 || (holidayName && events.length > 1) ? events.slice(0, 1) : events;
               const dayOfWeek = cell.date.getDay();
               const dayType = holidayName || dayOfWeek === 0 ? " holiday" : dayOfWeek === 6 ? " saturday-day" : "";
               return (
                 <div
                   key={cell.dateKey}
                   className={`day-cell${cell.isCurrentMonth ? "" : " outside"}${cell.isToday ? " today" : ""}${selected ? " selected" : ""}${dayType}`}
-                  onClick={() => setSelectedDate(cell.dateKey)}
+                  onClick={() => selectDate(cell.dateKey, events)}
+                  onContextMenu={(mouseEvent) => openContextMenu(mouseEvent, { kind: "day", date: cell.dateKey })}
                 >
                   <div className="day-cell-head">
                     <button
                       className="date-number"
-                      onClick={() => setSelectedDate(cell.dateKey)}
+                      onClick={(clickEvent) => { clickEvent.stopPropagation(); selectDate(cell.dateKey, events); }}
                       aria-label={`${cell.date.getMonth() + 1}月${cell.date.getDate()}日を選択`}
                     >
                       {cell.date.getDate()}
                     </button>
-                    {holidayName && <span className="holiday-name" title={holidayName}>{holidayName}</span>}
                     <button className="cell-add" onClick={(event) => { event.stopPropagation(); openNewEvent(cell.dateKey); }} aria-label={`${cell.date.getMonth() + 1}月${cell.date.getDate()}日に予定を追加`}>＋</button>
                   </div>
+                  {holidayName && <span className="holiday-name">{holidayName}</span>}
                   <div className="event-stack">
-                    {events.slice(0, 3).map((event) => (
+                    {visibleEvents.map((event) => (
                       <button
                         key={event.id}
                         className="event-chip"
                         style={styleForEvent(event.style)}
                         onClick={(clickEvent) => { clickEvent.stopPropagation(); setEditing(event); setSelectedDate(event.date); }}
+                        onContextMenu={(mouseEvent) => openContextMenu(mouseEvent, { kind: "event", event })}
                         title={`${formatEventTime(event)} ${event.title}`}
                       >
                         {!event.allDay && <span className="event-time">{event.startTime}</span>}
                         <span className="event-title">{event.title}</span>
                       </button>
                     ))}
-                    {events.length > 3 && <button className="more-events" onClick={() => setSelectedDate(cell.dateKey)}>ほか{events.length - 3}件</button>}
+                    {events.length > visibleEvents.length && <button className="more-events" onClick={(clickEvent) => { clickEvent.stopPropagation(); selectDate(cell.dateKey, events); }}>ほか{events.length - visibleEvents.length}件</button>}
                   </div>
                 </div>
               );
@@ -324,7 +377,89 @@ function App() {
           onClose={() => setSettingsOpen(false)}
         />
       )}
+      {agendaDate && (
+        <DayAgendaDialog
+          date={agendaDate}
+          events={eventsForDate(data.events, agendaDate)}
+          onClose={() => setAgendaDate(null)}
+          onAdd={() => { setAgendaDate(null); openNewEvent(agendaDate); }}
+          onEdit={(event) => { setAgendaDate(null); setSelectedDate(event.date); setEditing(event); }}
+        />
+      )}
+      {contextMenu && (
+        <div
+          className="calendar-context-menu"
+          role="menu"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onClick={(clickEvent) => clickEvent.stopPropagation()}
+        >
+          {contextMenu.kind === "event" ? (
+            <>
+              <p className="context-menu-title" title={contextMenu.event.title}>{contextMenu.event.title}</p>
+              <button role="menuitem" onClick={() => copyEvent(contextMenu.event)}>内容をコピー</button>
+              <button role="menuitem" onClick={() => { setContextMenu(null); setSelectedDate(contextMenu.event.date); setEditing(contextMenu.event); }}>編集</button>
+            </>
+          ) : (
+            <>
+              <p className="context-menu-title">{formatDayMenuDate(contextMenu.date)}</p>
+              <button role="menuitem" disabled={!copiedContent} onClick={() => void pasteCopiedEvent(contextMenu.date)}>
+                {copiedContent ? "ここに貼り付け" : "コピーした予定はありません"}
+              </button>
+              <button role="menuitem" onClick={() => { const date = contextMenu.date; setContextMenu(null); openNewEvent(date); }}>予定を追加</button>
+            </>
+          )}
+        </div>
+      )}
       {toast && <div className="toast" role="status">{toast}</div>}
+    </div>
+  );
+}
+
+function formatDayMenuDate(date: string): string {
+  const [year, month, day] = date.split("-").map(Number);
+  const weekday = WEEKDAYS[new Date(year, month - 1, day).getDay()];
+  return `${month}月${day}日（${weekday}）`;
+}
+
+interface DayAgendaDialogProps {
+  date: string;
+  events: CalendarEvent[];
+  onClose: () => void;
+  onAdd: () => void;
+  onEdit: (event: CalendarEvent) => void;
+}
+
+function DayAgendaDialog({ date, events, onClose, onAdd, onEdit }: DayAgendaDialogProps) {
+  useEffect(() => {
+    const closeOnEscape = (keyboardEvent: KeyboardEvent) => {
+      if (keyboardEvent.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onClose]);
+
+  return (
+    <div className="modal-backdrop" onMouseDown={(mouseEvent) => { if (mouseEvent.target === mouseEvent.currentTarget) onClose(); }}>
+      <section className="dialog agenda-dialog" aria-modal="true" role="dialog" aria-labelledby="agenda-dialog-title">
+        <header className="dialog-header">
+          <div><p className="section-kicker">DAY SCHEDULE</p><h2 id="agenda-dialog-title">{formatDayMenuDate(date)}の予定</h2></div>
+          <button type="button" className="close-button" onClick={onClose} aria-label="閉じる">×</button>
+        </header>
+        <div className="agenda-list">
+          {events.map((event) => (
+            <button key={event.id} className="agenda-event" onClick={() => onEdit(event)}>
+              <span className="agenda-event-dot" style={{ background: event.style.color }} />
+              <span className="agenda-event-time">{formatEventTime(event)}</span>
+              <span className="agenda-event-details">
+                <strong title={event.title}>{event.title}</strong>
+                {event.location && <small title={event.location}>{event.location}</small>}
+              </span>
+              <span className="agenda-event-arrow" aria-hidden="true">›</span>
+            </button>
+          ))}
+        </div>
+        <footer className="dialog-footer"><span /><button type="button" className="primary-button" onClick={onAdd}>この日に予定を追加</button></footer>
+      </section>
     </div>
   );
 }

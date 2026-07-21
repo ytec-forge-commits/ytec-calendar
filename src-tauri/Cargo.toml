@@ -1,6 +1,6 @@
 [package]
 name = "ytec-calendar"
-version = "0.1.1"
+version = "0.1.2"
 description = "持ち運べるWindows用カレンダー"
 authors = ["Y-TEC"]
 edition = "2021"
