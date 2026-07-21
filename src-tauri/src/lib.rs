@@ -12,7 +12,8 @@ use tauri::{
     Manager, PhysicalPosition, PhysicalSize, WindowEvent,
 };
 
-const DATA_VERSION: u32 = 1;
+const CALENDAR_DATA_VERSION: u32 = 2;
+const WINDOW_STATE_VERSION: u32 = 1;
 const MIN_WINDOW_HEIGHT: u32 = 600;
 const EXPANDED_MIN_WINDOW_WIDTH: u32 = 806;
 const COLLAPSED_MIN_WINDOW_WIDTH: u32 = 375;
@@ -29,6 +30,8 @@ struct CalendarEvent {
     id: String,
     title: String,
     date: String,
+    #[serde(default)]
+    annual: bool,
     all_day: bool,
     start_time: String,
     end_time: String,
@@ -68,7 +71,7 @@ struct AppData {
 impl Default for AppData {
     fn default() -> Self {
         Self {
-            version: DATA_VERSION,
+            version: CALENDAR_DATA_VERSION,
             events: Vec::new(),
             deleted_events: Vec::new(),
             settings: AppSettings {
@@ -93,7 +96,7 @@ struct WindowState {
 impl Default for WindowState {
     fn default() -> Self {
         Self {
-            version: DATA_VERSION,
+            version: WINDOW_STATE_VERSION,
             x: 80,
             y: 60,
             width: 960,
@@ -204,8 +207,11 @@ fn read_json_with_recovery<T: DeserializeOwned + Serialize>(
 
 fn load_app_data_inner() -> Result<AppData, String> {
     let path = portable_data_dir()?.join("calendar-data.json");
-    let data: AppData = read_json_with_recovery(&path)?.unwrap_or_default();
-    if data.version != DATA_VERSION {
+    let mut data: AppData = read_json_with_recovery(&path)?.unwrap_or_default();
+    if data.version == 1 {
+        data.version = CALENDAR_DATA_VERSION;
+        write_json_with_backup(&path, &data)?;
+    } else if data.version != CALENDAR_DATA_VERSION {
         return Err(format!("未対応の保存形式です（version: {}）", data.version));
     }
     if !path.exists() {
@@ -221,7 +227,7 @@ fn load_app_data() -> Result<AppData, String> {
 
 #[tauri::command]
 fn save_app_data(data: AppData) -> Result<(), String> {
-    if data.version != DATA_VERSION {
+    if data.version != CALENDAR_DATA_VERSION {
         return Err(format!("未対応の保存形式です（version: {}）", data.version));
     }
     if data
@@ -282,7 +288,7 @@ fn load_window_state() -> Option<WindowState> {
     read_json_with_recovery(&path)
         .ok()
         .flatten()
-        .filter(|state: &WindowState| state.version == DATA_VERSION)
+        .filter(|state: &WindowState| state.version == WINDOW_STATE_VERSION)
 }
 
 fn save_window_state(state: &WindowState) {
@@ -338,7 +344,7 @@ pub fn run() {
             let tray_menu = Menu::with_items(app, &[&show_item, &quit_item])?;
             let mut tray_builder = TrayIconBuilder::with_id("main")
                 .menu(&tray_menu)
-                .tooltip("Y-TEC Calendar")
+                .tooltip("Koyomado")
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id().as_ref() {
                     "show-calendar" => show_main_window(app),
@@ -391,7 +397,7 @@ pub fn run() {
                 let maximized = window.is_maximized().unwrap_or(false);
                 if let Ok(mut tracked) = app.state::<WindowTracker>().0.lock() {
                     tracked.state = WindowState {
-                        version: DATA_VERSION,
+                        version: WINDOW_STATE_VERSION,
                         x: position.x,
                         y: position.y,
                         width: size.width,
@@ -443,7 +449,7 @@ pub fn run() {
             set_sidebar_window_mode
         ])
         .run(tauri::generate_context!())
-        .expect("Y-TEC Calendarの起動に失敗しました");
+        .expect("Koyomadoの起動に失敗しました");
 }
 
 #[cfg(test)]
@@ -453,9 +459,29 @@ mod tests {
     #[test]
     fn default_data_uses_current_version() {
         let data = AppData::default();
-        assert_eq!(data.version, DATA_VERSION);
+        assert_eq!(data.version, CALENDAR_DATA_VERSION);
         assert!(data.events.is_empty());
         assert_eq!(data.settings.theme, "morning-mist");
+    }
+
+    #[test]
+    fn version_one_event_without_annual_flag_remains_compatible() {
+        let event: CalendarEvent = serde_json::from_value(serde_json::json!({
+            "id": "legacy-event",
+            "title": "以前の予定",
+            "date": "2026-07-22",
+            "allDay": true,
+            "startTime": "",
+            "endTime": "",
+            "location": "",
+            "notes": "",
+            "style": { "color": "#78a88f" },
+            "createdAt": "2026-07-21T00:00:00.000Z",
+            "updatedAt": "2026-07-21T00:00:00.000Z"
+        }))
+        .expect("version 1 event should deserialize");
+
+        assert!(!event.annual);
     }
 
     #[test]
@@ -470,6 +496,7 @@ mod tests {
     #[test]
     fn minimum_window_height_keeps_the_full_calendar_visible() {
         assert_eq!(MIN_WINDOW_HEIGHT, 600);
+        assert_eq!(WindowState::default().version, WINDOW_STATE_VERSION);
     }
 
     #[test]

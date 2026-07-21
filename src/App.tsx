@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState, type CSSProperties, type FormEvent, type MouseEvent as ReactMouseEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties, type DragEvent as ReactDragEvent, type FormEvent, type MouseEvent as ReactMouseEvent } from "react";
 import {
   copyEventContent,
+  duplicateEventToDate,
   eventsForDate,
   formatEventTime,
   getHolidayMap,
@@ -8,6 +9,7 @@ import {
   isValidTimeRange,
   longDateLabel,
   monthTitle,
+  moveEventToDate,
   pasteEventContent,
   shiftMonth,
   toDateKey,
@@ -23,13 +25,22 @@ import {
   type EventStyle,
   type ThemeId,
 } from "./types";
+import koyomadoLogo from "./assets/koyomado-logo.png";
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 const EVENT_COLORS = ["#78a88f", "#83a9c2", "#b49ac7", "#d2a36f", "#d7867f", "#92a86c"];
+const CALENDAR_EVENT_DRAG_TYPE = "application/x-koyomado-event";
 
 type CalendarContextMenu =
   | { kind: "event"; event: CalendarEvent; x: number; y: number }
   | { kind: "day"; date: string; x: number; y: number };
+
+interface CalendarDragState {
+  eventId: string;
+  sourceDate: string;
+  targetDate: string | null;
+  copy: boolean;
+}
 
 function styleForEvent(style: EventStyle): CSSProperties {
   return {
@@ -44,6 +55,7 @@ function createDraft(date: string, event?: CalendarEvent): CalendarEvent {
     id: crypto.randomUUID(),
     title: "",
     date,
+    annual: false,
     allDay: false,
     startTime: "09:00",
     endTime: "10:00",
@@ -66,6 +78,7 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState<CalendarContextMenu | null>(null);
   const [agendaDate, setAgendaDate] = useState<string | null>(null);
+  const [dragState, setDragState] = useState<CalendarDragState | null>(null);
   const [toast, setToast] = useState("");
   const [loadError, setLoadError] = useState("");
 
@@ -113,8 +126,10 @@ function App() {
       await saveAppData(next);
       setData(next);
       if (message) setToast(message);
+      return true;
     } catch (error) {
       setToast(`保存できませんでした: ${String(error)}`);
+      return false;
     }
   }, []);
 
@@ -169,6 +184,70 @@ function App() {
     await saveEvent(pasteEventContent(createDraft(date), copiedContent));
   };
 
+  const startEventDrag = (dragEvent: ReactDragEvent<HTMLButtonElement>, event: CalendarEvent) => {
+    dragEvent.stopPropagation();
+    dragEvent.dataTransfer.effectAllowed = "copyMove";
+    dragEvent.dataTransfer.setData(CALENDAR_EVENT_DRAG_TYPE, event.id);
+    dragEvent.dataTransfer.setData("text/plain", event.id);
+    setContextMenu(null);
+    setDragState({
+      eventId: event.id,
+      sourceDate: event.date,
+      targetDate: null,
+      copy: dragEvent.ctrlKey,
+    });
+  };
+
+  const updateDragTarget = (dragEvent: ReactDragEvent<HTMLDivElement>, targetDate: string) => {
+    if (!dragState) return;
+    dragEvent.preventDefault();
+    dragEvent.stopPropagation();
+    if (targetDate === dragState.sourceDate) {
+      dragEvent.dataTransfer.dropEffect = "none";
+      if (dragState.targetDate !== null) setDragState((current) => current ? { ...current, targetDate: null } : null);
+      return;
+    }
+    const copy = dragEvent.ctrlKey;
+    dragEvent.dataTransfer.dropEffect = copy ? "copy" : "move";
+    if (dragState.targetDate !== targetDate || dragState.copy !== copy) {
+      setDragState((current) => current ? { ...current, targetDate, copy } : null);
+    }
+  };
+
+  const leaveDragTarget = (dragEvent: ReactDragEvent<HTMLDivElement>, targetDate: string) => {
+    if (!dragState || dragState.targetDate !== targetDate) return;
+    const nextTarget = dragEvent.relatedTarget;
+    if (nextTarget instanceof Node && dragEvent.currentTarget.contains(nextTarget)) return;
+    setDragState((current) => current ? { ...current, targetDate: null } : null);
+  };
+
+  const dropEventOnDate = async (dropEvent: ReactDragEvent<HTMLDivElement>, targetDate: string) => {
+    dropEvent.preventDefault();
+    dropEvent.stopPropagation();
+    if (!data) return;
+    const eventId = dropEvent.dataTransfer.getData(CALENDAR_EVENT_DRAG_TYPE) || dragState?.eventId;
+    const copy = dropEvent.ctrlKey;
+    setDragState(null);
+    if (!eventId) return;
+    const source = data.events.find((event) => event.id === eventId);
+    if (!source) {
+      setToast("移動する予定を確認できませんでした");
+      return;
+    }
+    if (source.date === targetDate) {
+      setToast("別の日へドロップしてください");
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const targetLabel = formatDayMenuDate(targetDate);
+    const next = copy
+      ? { ...data, events: [...data.events, duplicateEventToDate(source, targetDate, crypto.randomUUID(), now)] }
+      : { ...data, events: data.events.map((event) => event.id === source.id ? moveEventToDate(event, targetDate, now) : event) };
+    const saved = await persist(next, `「${source.title}」を${targetLabel}へ${copy ? "コピー" : "移動"}しました`);
+    if (saved) setSelectedDate(targetDate);
+  };
+
   const openContextMenu = (
     mouseEvent: ReactMouseEvent,
     target: { kind: "event"; event: CalendarEvent } | { kind: "day"; date: string },
@@ -198,7 +277,7 @@ function App() {
   if (loadError) {
     return (
       <main className="fatal-state">
-        <p className="eyebrow">Y-TEC Calendar</p>
+        <p className="eyebrow">koyomado</p>
         <h1>カレンダーを開けませんでした</h1>
         <p>{loadError}</p>
         <p>アプリのフォルダーへ書き込めるか確認して、もう一度起動してください。</p>
@@ -219,10 +298,9 @@ function App() {
     <div className="app-shell">
       <header className="topbar">
         <div className="brand-block">
-          <div className="brand-mark" aria-hidden="true"><span>Y</span></div>
+          <img className="brand-mark" src={koyomadoLogo} alt="" aria-hidden="true" />
           <div>
-            <p className="eyebrow">Y-TEC</p>
-            <h1>Calendar</h1>
+            <h1>koyomado</h1>
           </div>
         </div>
 
@@ -278,7 +356,7 @@ function App() {
                   <button key={event.id} className="upcoming-item" onClick={() => { setSelectedDate(event.date); setEditing(event); }}>
                     <span className="upcoming-dot" style={{ background: event.style.color }} />
                     <span className="upcoming-date">{Number(event.date.slice(5, 7))}/{Number(event.date.slice(8, 10))}</span>
-                    <span className="upcoming-info"><strong>{event.title}</strong><small>{formatEventTime(event)}</small></span>
+                    <span className="upcoming-info"><strong>{event.title}</strong><small>{event.annual ? `毎年・${formatEventTime(event)}` : formatEventTime(event)}</small></span>
                   </button>
                 ))}
               </div>
@@ -306,6 +384,7 @@ function App() {
         </aside>
 
         <section className="calendar-panel" aria-label={`${monthTitle(displayMonth)}のカレンダー`}>
+          <p id="calendar-drag-help" className="sr-only">予定を別の日へドラッグすると移動します。Ctrlキーを押しながらドラッグするとコピーします。</p>
           <div className="weekday-row">
             {WEEKDAYS.map((day, index) => <div key={day} className={index === 0 ? "sunday" : index === 6 ? "saturday" : ""}>{day}</div>)}
           </div>
@@ -317,12 +396,18 @@ function App() {
               const visibleEvents = events.length > 2 || (holidayName && events.length > 1) ? events.slice(0, 1) : events;
               const dayOfWeek = cell.date.getDay();
               const dayType = holidayName || dayOfWeek === 0 ? " holiday" : dayOfWeek === 6 ? " saturday-day" : "";
+              const isDropTarget = dragState?.targetDate === cell.dateKey;
               return (
                 <div
                   key={cell.dateKey}
-                  className={`day-cell${cell.isCurrentMonth ? "" : " outside"}${cell.isToday ? " today" : ""}${selected ? " selected" : ""}${dayType}`}
+                  className={`day-cell${cell.isCurrentMonth ? "" : " outside"}${cell.isToday ? " today" : ""}${selected ? " selected" : ""}${dayType}${isDropTarget ? ` drop-target ${dragState.copy ? "drop-copy-target" : "drop-move-target"}` : ""}`}
+                  data-drop-label={isDropTarget ? (dragState.copy ? "コピー" : "移動") : undefined}
                   onClick={() => selectDate(cell.dateKey, events)}
                   onContextMenu={(mouseEvent) => openContextMenu(mouseEvent, { kind: "day", date: cell.dateKey })}
+                  onDragEnter={(dragEvent) => updateDragTarget(dragEvent, cell.dateKey)}
+                  onDragOver={(dragEvent) => updateDragTarget(dragEvent, cell.dateKey)}
+                  onDragLeave={(dragEvent) => leaveDragTarget(dragEvent, cell.dateKey)}
+                  onDrop={(dropEvent) => void dropEventOnDate(dropEvent, cell.dateKey)}
                 >
                   <div className="day-cell-head">
                     <button
@@ -339,12 +424,17 @@ function App() {
                     {visibleEvents.map((event) => (
                       <button
                         key={event.id}
-                        className="event-chip"
+                        className={dragState?.eventId === event.id ? "event-chip dragging" : "event-chip"}
                         style={styleForEvent(event.style)}
+                        draggable
+                        onDragStart={(dragEvent) => startEventDrag(dragEvent, event)}
+                        onDragEnd={() => setDragState(null)}
                         onClick={(clickEvent) => { clickEvent.stopPropagation(); setEditing(event); setSelectedDate(event.date); }}
                         onContextMenu={(mouseEvent) => openContextMenu(mouseEvent, { kind: "event", event })}
-                        title={`${formatEventTime(event)} ${event.title}`}
+                        aria-describedby="calendar-drag-help"
+                        title={`${event.annual ? "毎年 " : ""}${formatEventTime(event)} ${event.title}\nドラッグで移動 / Ctrl＋ドラッグでコピー`}
                       >
+                        {event.annual && <span className="annual-indicator" aria-label="毎年繰り返す予定">↻</span>}
                         {!event.allDay && <span className="event-time">{event.startTime}</span>}
                         <span className="event-title">{event.title}</span>
                       </button>
@@ -410,6 +500,11 @@ function App() {
           )}
         </div>
       )}
+      {dragState && (
+        <div className="drag-instruction" role="status">
+          {dragState.copy ? "コピー先の日付へドロップ（Ctrlを離すと移動）" : "移動先の日付へドロップ（Ctrlを押すとコピー）"}
+        </div>
+      )}
       {toast && <div className="toast" role="status">{toast}</div>}
     </div>
   );
@@ -453,6 +548,7 @@ function DayAgendaDialog({ date, events, onClose, onAdd, onEdit }: DayAgendaDial
               <span className="agenda-event-details">
                 <strong title={event.title}>{event.title}</strong>
                 {event.location && <small title={event.location}>{event.location}</small>}
+                {event.annual && <span className="annual-badge">毎年の記念日</span>}
               </span>
               <span className="agenda-event-arrow" aria-hidden="true">›</span>
             </button>
@@ -551,6 +647,12 @@ function EventEditor({ date, event, copiedContent, onClose, onSave, onDelete, on
             )}
           </div>
 
+          <label className="toggle-field annual-toggle">
+            <input type="checkbox" checked={draft.annual} onChange={(changeEvent) => patchDraft("annual", changeEvent.target.checked)} />
+            <span className="toggle-track" />
+            <span className="toggle-copy"><strong>毎年繰り返す</strong><small>誕生日や記念日として、毎年同じ月日に表示します</small></span>
+          </label>
+
           <label className="field"><span>場所 <small>任意</small></span><input value={draft.location} onChange={(changeEvent) => patchDraft("location", changeEvent.target.value)} placeholder="会議室、訪問先など" maxLength={100} /></label>
           <label className="field"><span>メモ <small>任意</small></span><textarea value={draft.notes} onChange={(changeEvent) => patchDraft("notes", changeEvent.target.value)} placeholder="補足や持ち物など" rows={3} maxLength={1000} /></label>
 
@@ -559,7 +661,7 @@ function EventEditor({ date, event, copiedContent, onClose, onSave, onDelete, on
             <div className="color-row">
               <span>背景色</span><div className="color-options">{EVENT_COLORS.map((color) => <button type="button" key={color} className={draft.style.color === color ? "color-dot active" : "color-dot"} style={{ background: color }} onClick={() => patchStyle("color", color)} aria-label={`背景色 ${color}`} />)}</div>
             </div>
-            <div className="event-preview" style={styleForEvent(draft.style)}><span>{draft.allDay ? "終日" : draft.startTime}</span>{draft.title || "予定のプレビュー"}</div>
+            <div className="event-preview" style={styleForEvent(draft.style)}><span>{draft.annual ? `毎年・${draft.allDay ? "終日" : draft.startTime}` : draft.allDay ? "終日" : draft.startTime}</span>{draft.title || "予定のプレビュー"}</div>
           </fieldset>
           {error && <p className="form-error" role="alert">{error}</p>}
         </div>

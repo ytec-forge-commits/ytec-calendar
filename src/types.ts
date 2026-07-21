@@ -1,4 +1,4 @@
-export const DATA_VERSION = 1 as const;
+export const DATA_VERSION = 2 as const;
 
 export type ThemeId =
   | "morning-mist"
@@ -18,6 +18,7 @@ export interface CalendarEvent {
   id: string;
   title: string;
   date: string;
+  annual: boolean;
   allDay: boolean;
   startTime: string;
   endTime: string;
@@ -30,7 +31,7 @@ export interface CalendarEvent {
 
 export type EventContent = Pick<
   CalendarEvent,
-  "title" | "allDay" | "startTime" | "endTime" | "location" | "notes" | "style"
+  "title" | "annual" | "allDay" | "startTime" | "endTime" | "location" | "notes" | "style"
 >;
 
 export interface DeletedCalendarEvent extends CalendarEvent {

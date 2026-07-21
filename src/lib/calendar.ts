@@ -56,14 +56,21 @@ export function sortEvents(events: CalendarEvent[]): CalendarEvent[] {
 }
 
 export function eventsForDate(events: CalendarEvent[], dateKey: string): CalendarEvent[] {
-  return sortEvents(events.filter((event) => event.date === dateKey));
+  const monthAndDay = dateKey.slice(5);
+  return sortEvents(events.flatMap((event) => {
+    if (event.date === dateKey) return [event];
+    if (event.annual && event.date.slice(5) === monthAndDay) return [{ ...event, date: dateKey }];
+    return [];
+  }));
 }
 
 export function upcomingEvents(events: CalendarEvent[], today = new Date(), days = 7): CalendarEvent[] {
-  const start = toDateKey(today);
-  const endDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() + days);
-  const end = toDateKey(endDate);
-  return sortEvents(events.filter((event) => event.date >= start && event.date <= end));
+  const occurrences: CalendarEvent[] = [];
+  for (let offset = 0; offset <= days; offset += 1) {
+    const date = new Date(today.getFullYear(), today.getMonth(), today.getDate() + offset);
+    occurrences.push(...eventsForDate(events, toDateKey(date)));
+  }
+  return sortEvents(occurrences);
 }
 
 export function shiftMonth(date: Date, amount: number): Date {
@@ -77,6 +84,7 @@ export function formatEventTime(event: CalendarEvent): string {
 export function copyEventContent(event: CalendarEvent): EventContent {
   return {
     title: event.title,
+    annual: event.annual,
     allDay: event.allDay,
     startTime: event.startTime,
     endTime: event.endTime,
@@ -91,6 +99,30 @@ export function pasteEventContent(target: CalendarEvent, content: EventContent):
     ...target,
     ...content,
     style: { ...content.style },
+  };
+}
+
+export function moveEventToDate(event: CalendarEvent, targetDate: string, updatedAt: string): CalendarEvent {
+  return {
+    ...event,
+    date: targetDate,
+    updatedAt,
+  };
+}
+
+export function duplicateEventToDate(
+  event: CalendarEvent,
+  targetDate: string,
+  id: string,
+  createdAt: string,
+): CalendarEvent {
+  return {
+    ...event,
+    id,
+    date: targetDate,
+    style: { ...event.style },
+    createdAt,
+    updatedAt: createdAt,
   };
 }
 

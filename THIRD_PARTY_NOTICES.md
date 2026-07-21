@@ -1,6 +1,6 @@
 # Third-party notices
 
-Y-TEC Calendar uses the following open-source software.
+Koyomado uses the following open-source software.
 
 - React — MIT License
 - Vite — MIT License

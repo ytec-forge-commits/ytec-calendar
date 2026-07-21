@@ -4,9 +4,9 @@ $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $releaseRoot = Join-Path $projectRoot "release"
 $packageJson = Get-Content -LiteralPath (Join-Path $projectRoot "package.json") -Raw | ConvertFrom-Json
 $version = $packageJson.version
-$archivePath = Join-Path $releaseRoot "ytec-calendar-v$version-windows-portable.zip"
-$stagingPath = Join-Path $releaseRoot ".staging-ytec-calendar-$PID"
-$executablePath = Join-Path $projectRoot "src-tauri\target\release\ytec-calendar.exe"
+$archivePath = Join-Path $releaseRoot "koyomado-v$version-windows-portable.zip"
+$stagingPath = Join-Path $releaseRoot ".staging-koyomado-$PID"
+$executablePath = Join-Path $projectRoot "src-tauri\target\release\koyomado.exe"
 
 Push-Location $projectRoot
 try {
@@ -18,7 +18,7 @@ try {
     New-Item -ItemType Directory -Force -Path $releaseRoot | Out-Null
     New-Item -ItemType Directory -Path $stagingPath | Out-Null
     New-Item -ItemType Directory -Path (Join-Path $stagingPath "data") | Out-Null
-    Copy-Item -LiteralPath $executablePath -Destination (Join-Path $stagingPath "ytec-calendar.exe")
+    Copy-Item -LiteralPath $executablePath -Destination (Join-Path $stagingPath "koyomado.exe")
 
     @(
         "このフォルダーに予定と設定が保存されます。"
@@ -26,9 +26,9 @@ try {
     ) | Set-Content -LiteralPath (Join-Path $stagingPath "data\ここにデータが保存されます.txt") -Encoding UTF8
 
     @(
-        "Y-TEC Calendar $version"
+        "Koyomado $version"
         ""
-        "1. ytec-calendar.exe を起動してください。"
+        "1. koyomado.exe を起動してください。"
         "2. 配置場所を決めた後、右上の歯車からWindows自動起動をONにできます。"
         "3. 予定と設定は同じ場所の data フォルダーへ保存されます。"
         "4. 更新時は data フォルダーを残し、実行ファイルだけ差し替えてください。"

@@ -4,6 +4,8 @@ src-tauri/target/
 release/
 .playwright-cli/
 output/playwright/
+output/imagegen/
+output/native-smoke-*/
 *.log
 .DS_Store
 data/calendar-data.json

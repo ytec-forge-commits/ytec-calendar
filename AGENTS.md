@@ -1,4 +1,4 @@
-# Y-TEC Calendar 固有規則
+# Koyomado 固有規則
 
 - 正本ソースはこのディレクトリ。Windows専用のTauri 2アプリとして維持する。
 - 予定・外観設定は実行ファイル横の `data/calendar-data.json`、ウィンドウ位置は `data/window-state.json` に保存する。

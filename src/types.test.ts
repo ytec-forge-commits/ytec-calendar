@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { THEMES } from "./types";
+import { DATA_VERSION, THEMES } from "./types";
+
+describe("保存形式", () => {
+  it("記念日対応のversion 2を使用する", () => {
+    expect(DATA_VERSION).toBe(2);
+  });
+});
 
 describe("背景テーマ", () => {
   it("8種類の重複しないテーマを提供する", () => {

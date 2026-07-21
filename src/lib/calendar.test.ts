@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { copyEventContent, eventsForDate, getHolidayMap, getMonthCells, isValidTimeRange, pasteEventContent, shiftMonth, toDateKey, upcomingEvents } from "./calendar";
+import { copyEventContent, duplicateEventToDate, eventsForDate, getHolidayMap, getMonthCells, isValidTimeRange, moveEventToDate, pasteEventContent, shiftMonth, toDateKey, upcomingEvents } from "./calendar";
 import type { CalendarEvent } from "../types";
 import { DEFAULT_EVENT_STYLE } from "../types";
 
@@ -7,6 +7,7 @@ const makeEvent = (id: string, date: string, startTime = "10:00", allDay = false
   id,
   title: id,
   date,
+  annual: false,
   allDay,
   startTime,
   endTime: "11:00",
@@ -48,6 +49,23 @@ describe("calendar utilities", () => {
     expect(upcomingEvents(events, new Date(2026, 6, 21), 7).map((event) => event.id)).toEqual(["今日", "7日後"]);
   });
 
+  it("毎年の記念日を年に関係なく同じ月日に表示する", () => {
+    const anniversary = { ...makeEvent("誕生日", "2024-07-24", "", true), annual: true };
+    const occurrence = eventsForDate([anniversary], "2027-07-24");
+
+    expect(occurrence).toHaveLength(1);
+    expect(occurrence[0]).toMatchObject({ id: "誕生日", date: "2027-07-24", annual: true });
+    expect(eventsForDate([anniversary], "2027-07-25")).toHaveLength(0);
+  });
+
+  it("直近予定にも毎年の記念日を展開する", () => {
+    const anniversary = { ...makeEvent("記念日", "2021-01-02", "", true), annual: true };
+
+    expect(upcomingEvents([anniversary], new Date(2026, 11, 30), 4)).toMatchObject([
+      { id: "記念日", date: "2027-01-02", annual: true },
+    ]);
+  });
+
   it("月移動で年をまたげる", () => {
     expect(toDateKey(shiftMonth(new Date(2026, 11, 1), 1))).toBe("2027-01-01");
   });
@@ -68,6 +86,7 @@ describe("calendar utilities", () => {
     const source = {
       ...makeEvent("お休み", "2026-07-22", "", true),
       title: "お休み",
+      annual: true,
       location: "自宅",
       notes: "連絡不要",
       style: { color: "#b49ac7" },
@@ -79,11 +98,51 @@ describe("calendar utilities", () => {
       id: "new-id",
       date: "2026-07-29",
       title: "お休み",
+      annual: true,
       allDay: true,
       location: "自宅",
       notes: "連絡不要",
       style: { color: "#b49ac7" },
     });
     expect(pasted.createdAt).toBe(target.createdAt);
+  });
+
+  it("ドラッグ移動では識別情報を維持して日付だけを変更する", () => {
+    const source = { ...makeEvent("event-1", "2026-07-22"), annual: true };
+    const moved = moveEventToDate(source, "2026-07-25", "2026-07-22T01:00:00.000Z");
+
+    expect(moved).toMatchObject({
+      id: "event-1",
+      date: "2026-07-25",
+      annual: true,
+      createdAt: source.createdAt,
+      updatedAt: "2026-07-22T01:00:00.000Z",
+    });
+    expect(source.date).toBe("2026-07-22");
+  });
+
+  it("Ctrlドラッグ複製では内容を保ち新しい識別情報を割り当てる", () => {
+    const source = {
+      ...makeEvent("event-1", "2026-07-22"),
+      title: "訪問予定",
+      annual: true,
+      notes: "資料を持参",
+      style: { color: "#b49ac7" },
+    };
+    const copied = duplicateEventToDate(source, "2026-07-26", "event-2", "2026-07-22T02:00:00.000Z");
+
+    expect(copied).toMatchObject({
+      id: "event-2",
+      date: "2026-07-26",
+      title: "訪問予定",
+      annual: true,
+      notes: "資料を持参",
+      createdAt: "2026-07-22T02:00:00.000Z",
+      updatedAt: "2026-07-22T02:00:00.000Z",
+      style: { color: "#b49ac7" },
+    });
+    expect(copied.style).not.toBe(source.style);
+    expect(source.id).toBe("event-1");
+    expect(source.date).toBe("2026-07-22");
   });
 });
