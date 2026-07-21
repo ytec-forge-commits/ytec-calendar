@@ -1,6 +1,14 @@
 export const DATA_VERSION = 1 as const;
 
-export type ThemeId = "morning-mist" | "forest-breath" | "lavender-dusk" | "warm-sand" | "moon-water";
+export type ThemeId =
+  | "morning-mist"
+  | "forest-breath"
+  | "lavender-dusk"
+  | "warm-sand"
+  | "moon-water"
+  | "sky-breeze"
+  | "sakura-haze"
+  | "birch-morning";
 
 export interface EventStyle {
   color: string;
@@ -99,5 +107,23 @@ export const THEMES: ThemeOption[] = [
     name: "月夜の水面",
     description: "静かな藍と月明かり",
     colors: ["#202d3a", "#293c4b", "#89aeb5"],
+  },
+  {
+    id: "sky-breeze",
+    name: "空のそよ風",
+    description: "澄んだ空と薄雲の青",
+    colors: ["#e8f1f7", "#d8e8f3", "#739bb7"],
+  },
+  {
+    id: "sakura-haze",
+    name: "桜かすみ",
+    description: "やさしい桜色と白",
+    colors: ["#f7edef", "#f1dfe3", "#b9838e"],
+  },
+  {
+    id: "birch-morning",
+    name: "白樺の朝",
+    description: "清らかな白と淡い木肌",
+    colors: ["#f3f2ed", "#e6e2d7", "#9a927e"],
   },
 ];

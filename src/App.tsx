@@ -619,7 +619,7 @@ function SettingsDialog({ settings, onChange, onClose }: SettingsDialogProps) {
         <header className="dialog-header"><div><p className="section-kicker">PREFERENCES</p><h2 id="settings-dialog-title">表示と起動の設定</h2></div><button className="close-button" onClick={onClose} aria-label="閉じる">×</button></header>
         <div className="settings-body">
           <section className="settings-section">
-            <div className="settings-heading"><div><h3>背景テーマ</h3><p>5つの落ち着いた配色から選べます。</p></div></div>
+            <div className="settings-heading"><div><h3>背景テーマ</h3><p>8つの落ち着いた配色から選べます。</p></div></div>
             <div className="theme-grid">
               {THEMES.map((theme) => (
                 <button key={theme.id} className={settings.theme === theme.id ? "theme-card active" : "theme-card"} onClick={() => void onChange({ ...settings, theme: theme.id as ThemeId })}>
