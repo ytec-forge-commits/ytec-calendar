@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { eventsForDate, getHolidayMap, getMonthCells, isValidTimeRange, shiftMonth, toDateKey, upcomingEvents } from "./calendar";
+import { copyEventContent, eventsForDate, getHolidayMap, getMonthCells, isValidTimeRange, pasteEventContent, shiftMonth, toDateKey, upcomingEvents } from "./calendar";
 import type { CalendarEvent } from "../types";
 import { DEFAULT_EVENT_STYLE } from "../types";
 
@@ -62,5 +62,28 @@ describe("calendar utilities", () => {
     const holidays = getHolidayMap(new Date(2026, 6, 1), new Date(2026, 6, 31));
     expect(holidays.get("2026-07-20")).toBe("海の日");
     expect(holidays.has("2026-07-21")).toBe(false);
+  });
+
+  it("予定内容の貼り付けでは貼り付け先の日付と識別情報を維持する", () => {
+    const source = {
+      ...makeEvent("お休み", "2026-07-22", "", true),
+      title: "お休み",
+      location: "自宅",
+      notes: "連絡不要",
+      style: { color: "#b49ac7" },
+    };
+    const target = makeEvent("new-id", "2026-07-29", "09:00");
+    const pasted = pasteEventContent(target, copyEventContent(source));
+
+    expect(pasted).toMatchObject({
+      id: "new-id",
+      date: "2026-07-29",
+      title: "お休み",
+      allDay: true,
+      location: "自宅",
+      notes: "連絡不要",
+      style: { color: "#b49ac7" },
+    });
+    expect(pasted.createdAt).toBe(target.createdAt);
   });
 });

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties, type FormEvent } from "react";
 import {
+  copyEventContent,
   eventsForDate,
   formatEventTime,
   getHolidayMap,
@@ -7,16 +8,18 @@ import {
   isValidTimeRange,
   longDateLabel,
   monthTitle,
+  pasteEventContent,
   shiftMonth,
   toDateKey,
   upcomingEvents,
 } from "./lib/calendar";
-import { getAutoStartState, getDataDirectory, loadAppData, saveAppData, setAutoStartState } from "./lib/store";
+import { getAutoStartState, getDataDirectory, loadAppData, saveAppData, setAutoStartState, setSidebarWindowMode } from "./lib/store";
 import {
   DEFAULT_EVENT_STYLE,
   THEMES,
   type AppData,
   type CalendarEvent,
+  type EventContent,
   type EventStyle,
   type ThemeId,
 } from "./types";
@@ -55,6 +58,7 @@ function App() {
   const [displayMonth, setDisplayMonth] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
   const [selectedDate, setSelectedDate] = useState(todayKey);
   const [editing, setEditing] = useState<CalendarEvent | "new" | null>(null);
+  const [copiedContent, setCopiedContent] = useState<EventContent | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [toast, setToast] = useState("");
   const [loadError, setLoadError] = useState("");
@@ -67,6 +71,14 @@ function App() {
     if (!data) return;
     document.documentElement.dataset.theme = data.settings.theme;
   }, [data]);
+
+  const sidebarCollapsed = data?.settings.sidebarCollapsed;
+  useEffect(() => {
+    if (sidebarCollapsed === undefined) return;
+    void setSidebarWindowMode(sidebarCollapsed).catch((error: unknown) => {
+      setToast(`ウィンドウ幅を調整できませんでした: ${String(error)}`);
+    });
+  }, [sidebarCollapsed]);
 
   useEffect(() => {
     if (!toast) return;
@@ -120,6 +132,12 @@ function App() {
     };
     await persist(next, "予定を削除しました");
     setEditing(null);
+  };
+
+  const copyEvent = (event: CalendarEvent) => {
+    setCopiedContent(copyEventContent(event));
+    setEditing(null);
+    setToast(`「${event.title.trim()}」の内容をコピーしました`);
   };
 
   const updateSettings = async (settings: AppData["settings"]) => {
@@ -222,7 +240,7 @@ function App() {
               <p className="section-kicker">BACKGROUND</p>
               <h2>{THEMES.find((theme) => theme.id === data.settings.theme)?.name}</h2>
             </div>
-            <div className="mini-swatches" aria-label="背景テーマを選択">
+            <div className="mini-swatches" role="group" aria-label="背景テーマを選択">
               {THEMES.map((theme) => (
                 <button
                   key={theme.id}
@@ -292,9 +310,11 @@ function App() {
           key={editing === "new" ? `new-${selectedDate}` : editing.id}
           date={selectedDate}
           event={editing === "new" ? undefined : editing}
+          copiedContent={copiedContent}
           onClose={() => setEditing(null)}
           onSave={saveEvent}
           onDelete={deleteEvent}
+          onCopy={copyEvent}
         />
       )}
       {settingsOpen && (
@@ -312,12 +332,14 @@ function App() {
 interface EventEditorProps {
   date: string;
   event?: CalendarEvent;
+  copiedContent: EventContent | null;
   onClose: () => void;
   onSave: (event: CalendarEvent) => Promise<void>;
   onDelete: (event: CalendarEvent) => Promise<void>;
+  onCopy: (event: CalendarEvent) => void;
 }
 
-function EventEditor({ date, event, onClose, onSave, onDelete }: EventEditorProps) {
+function EventEditor({ date, event, copiedContent, onClose, onSave, onDelete, onCopy }: EventEditorProps) {
   const [draft, setDraft] = useState(() => createDraft(date, event));
   const [error, setError] = useState("");
 
@@ -346,6 +368,19 @@ function EventEditor({ date, event, onClose, onSave, onDelete }: EventEditorProp
     void onSave({ ...draft, title, location: draft.location.trim(), notes: draft.notes.trim() });
   };
 
+  const copyCurrentContent = () => {
+    const title = draft.title.trim();
+    if (!title) return setError("コピーする予定名を入力してください。");
+    setError("");
+    onCopy({ ...draft, title, location: draft.location.trim(), notes: draft.notes.trim() });
+  };
+
+  const pasteCopiedContent = () => {
+    if (!copiedContent) return;
+    setDraft((current) => pasteEventContent(current, copiedContent));
+    setError("");
+  };
+
   return (
     <div className="modal-backdrop" onMouseDown={(mouseEvent) => { if (mouseEvent.target === mouseEvent.currentTarget) onClose(); }}>
       <form className="dialog event-dialog" onSubmit={submit} aria-modal="true" role="dialog" aria-labelledby="event-dialog-title">
@@ -355,6 +390,15 @@ function EventEditor({ date, event, onClose, onSave, onDelete }: EventEditorProp
         </header>
 
         <div className="form-body">
+          {!event && copiedContent && (
+            <div className="copy-paste-bar">
+              <span className="copy-paste-details">
+                <small>コピーした予定</small>
+                <strong title={copiedContent.title}>{copiedContent.title}</strong>
+              </span>
+              <button type="button" className="secondary-button paste-button" onClick={pasteCopiedContent}>内容を貼り付け</button>
+            </div>
+          )}
           <label className="field title-field">
             <span>予定名 <b>必須</b></span>
             <input autoFocus value={draft.title} onChange={(changeEvent) => patchDraft("title", changeEvent.target.value)} placeholder="例：定例ミーティング" maxLength={80} />
@@ -386,7 +430,10 @@ function EventEditor({ date, event, onClose, onSave, onDelete }: EventEditorProp
         </div>
 
         <footer className="dialog-footer">
-          <div>{event && <button type="button" className="danger-button" onClick={() => void onDelete(event)}>削除</button>}</div>
+          <div className="footer-left">
+            {event && <button type="button" className="danger-button" onClick={() => void onDelete(event)}>削除</button>}
+            {event && <button type="button" className="secondary-button copy-button" onClick={copyCurrentContent}>内容をコピー</button>}
+          </div>
           <div className="footer-actions"><button type="button" className="secondary-button" onClick={onClose}>キャンセル</button><button type="submit" className="primary-button">{event ? "変更を保存" : "予定を追加"}</button></div>
         </footer>
       </form>

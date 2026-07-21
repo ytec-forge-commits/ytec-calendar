@@ -1,5 +1,5 @@
 import { between } from "@gahojin-inc/holiday-japanese";
-import type { CalendarEvent, DayCell } from "../types";
+import type { CalendarEvent, DayCell, EventContent } from "../types";
 
 const pad = (value: number) => String(value).padStart(2, "0");
 
@@ -72,6 +72,26 @@ export function shiftMonth(date: Date, amount: number): Date {
 
 export function formatEventTime(event: CalendarEvent): string {
   return event.allDay ? "終日" : event.startTime;
+}
+
+export function copyEventContent(event: CalendarEvent): EventContent {
+  return {
+    title: event.title,
+    allDay: event.allDay,
+    startTime: event.startTime,
+    endTime: event.endTime,
+    location: event.location,
+    notes: event.notes,
+    style: { ...event.style },
+  };
+}
+
+export function pasteEventContent(target: CalendarEvent, content: EventContent): CalendarEvent {
+  return {
+    ...target,
+    ...content,
+    style: { ...content.style },
+  };
 }
 
 export function isValidTimeRange(startTime: string, endTime: string): boolean {

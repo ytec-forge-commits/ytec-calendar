@@ -46,6 +46,12 @@ export async function saveAppData(data: AppData): Promise<void> {
   localStorage.setItem(WEB_STORAGE_KEY, JSON.stringify(data));
 }
 
+export async function setSidebarWindowMode(collapsed: boolean): Promise<void> {
+  if (!isTauriRuntime()) return;
+  const { invoke } = await import("@tauri-apps/api/core");
+  await invoke("set_sidebar_window_mode", { collapsed });
+}
+
 export async function getDataDirectory(): Promise<string> {
   if (isTauriRuntime()) {
     const { invoke } = await import("@tauri-apps/api/core");

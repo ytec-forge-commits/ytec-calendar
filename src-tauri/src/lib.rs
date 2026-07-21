@@ -6,9 +6,16 @@ use std::{
     sync::Mutex,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
-use tauri::{Manager, PhysicalPosition, PhysicalSize, WindowEvent};
+use tauri::{
+    menu::{Menu, MenuItem},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    Manager, PhysicalPosition, PhysicalSize, WindowEvent,
+};
 
 const DATA_VERSION: u32 = 1;
+const MIN_WINDOW_HEIGHT: u32 = 600;
+const EXPANDED_MIN_WINDOW_WIDTH: u32 = 806;
+const COLLAPSED_MIN_WINDOW_WIDTH: u32 = 375;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -232,6 +239,44 @@ fn get_data_directory() -> Result<String, String> {
     Ok(portable_data_dir()?.display().to_string())
 }
 
+fn sidebar_min_width(collapsed: bool) -> u32 {
+    if collapsed {
+        COLLAPSED_MIN_WINDOW_WIDTH
+    } else {
+        EXPANDED_MIN_WINDOW_WIDTH
+    }
+}
+
+fn apply_sidebar_window_mode<R: tauri::Runtime>(
+    window: &tauri::WebviewWindow<R>,
+    collapsed: bool,
+) -> Result<(), String> {
+    let min_width = sidebar_min_width(collapsed);
+    window
+        .set_min_size(Some(PhysicalSize::new(min_width, MIN_WINDOW_HEIGHT)))
+        .map_err(|error| format!("ウィンドウの最小サイズを変更できません: {error}"))?;
+
+    if !collapsed {
+        let size = window
+            .outer_size()
+            .map_err(|error| format!("現在のウィンドウサイズを確認できません: {error}"))?;
+        if size.width < EXPANDED_MIN_WINDOW_WIDTH {
+            window
+                .set_size(PhysicalSize::new(
+                    EXPANDED_MIN_WINDOW_WIDTH,
+                    size.height.max(MIN_WINDOW_HEIGHT),
+                ))
+                .map_err(|error| format!("サイドバー表示幅へ広げられません: {error}"))?;
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn set_sidebar_window_mode(window: tauri::WebviewWindow, collapsed: bool) -> Result<(), String> {
+    apply_sidebar_window_mode(&window, collapsed)
+}
+
 fn load_window_state() -> Option<WindowState> {
     let path = portable_data_dir().ok()?.join("window-state.json");
     read_json_with_recovery(&path)
@@ -267,6 +312,14 @@ fn state_is_visible<R: tauri::Runtime>(
         .unwrap_or(false)
 }
 
+fn show_main_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -279,13 +332,49 @@ pub fn run() {
             None,
         ))
         .setup(|app| {
+            let show_item =
+                MenuItem::with_id(app, "show-calendar", "カレンダーを表示", true, None::<&str>)?;
+            let quit_item = MenuItem::with_id(app, "quit-calendar", "終了", true, None::<&str>)?;
+            let tray_menu = Menu::with_items(app, &[&show_item, &quit_item])?;
+            let mut tray_builder = TrayIconBuilder::with_id("main")
+                .menu(&tray_menu)
+                .tooltip("Y-TEC Calendar")
+                .show_menu_on_left_click(false)
+                .on_menu_event(|app, event| match event.id().as_ref() {
+                    "show-calendar" => show_main_window(app),
+                    "quit-calendar" => app.exit(0),
+                    _ => {}
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if matches!(
+                        event,
+                        TrayIconEvent::Click {
+                            button: MouseButton::Left,
+                            button_state: MouseButtonState::Up,
+                            ..
+                        }
+                    ) {
+                        show_main_window(tray.app_handle());
+                    }
+                });
+            if let Some(icon) = app.default_window_icon() {
+                tray_builder = tray_builder.icon(icon.clone());
+            }
+            tray_builder.build(app)?;
+
             if let Some(window) = app.get_webview_window("main") {
+                let sidebar_collapsed = load_app_data_inner()
+                    .map(|data| data.settings.sidebar_collapsed)
+                    .unwrap_or(false);
+                let min_width = sidebar_min_width(sidebar_collapsed);
+                window.set_min_size(Some(PhysicalSize::new(min_width, MIN_WINDOW_HEIGHT)))?;
+
                 if let Some(state) = load_window_state() {
                     if state_is_visible(&window, &state) {
                         window.set_position(PhysicalPosition::new(state.x, state.y))?;
                         window.set_size(PhysicalSize::new(
-                            state.width.max(720),
-                            state.height.max(520),
+                            state.width.max(min_width),
+                            state.height.max(MIN_WINDOW_HEIGHT),
                         ))?;
                     } else {
                         window.center()?;
@@ -341,11 +430,17 @@ pub fn run() {
                 save_window_state(&tracked.state);
                 tracked.last_saved = Instant::now();
             }
+
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = window.hide();
+            }
         })
         .invoke_handler(tauri::generate_handler![
             load_app_data,
             save_app_data,
-            get_data_directory
+            get_data_directory,
+            set_sidebar_window_mode
         ])
         .run(tauri::generate_context!())
         .expect("Y-TEC Calendarの起動に失敗しました");
@@ -370,5 +465,16 @@ mod tests {
             backup_path(&path),
             PathBuf::from("data/calendar-data.backup.json")
         );
+    }
+
+    #[test]
+    fn minimum_window_height_keeps_the_full_calendar_visible() {
+        assert_eq!(MIN_WINDOW_HEIGHT, 600);
+    }
+
+    #[test]
+    fn sidebar_state_controls_the_minimum_window_width() {
+        assert_eq!(sidebar_min_width(false), 806);
+        assert_eq!(sidebar_min_width(true), 375);
     }
 }

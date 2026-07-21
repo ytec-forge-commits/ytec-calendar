@@ -20,6 +20,11 @@ export interface CalendarEvent {
   updatedAt: string;
 }
 
+export type EventContent = Pick<
+  CalendarEvent,
+  "title" | "allDay" | "startTime" | "endTime" | "location" | "notes" | "style"
+>;
+
 export interface DeletedCalendarEvent extends CalendarEvent {
   deletedAt: string;
 }
