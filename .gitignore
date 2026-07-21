@@ -1,0 +1,12 @@
+node_modules/
+dist/
+src-tauri/target/
+release/
+.playwright-cli/
+output/playwright/
+*.log
+.DS_Store
+data/calendar-data.json
+data/calendar-data.backup.json
+data/window-state.json
+data/window-state.backup.json
