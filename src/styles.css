@@ -37,6 +37,7 @@
   --accent-strong: #3f6655;
   --accent-soft: #dceae2;
   --accent-text: #ffffff;
+  --event-text: #17382b;
   --today-ring: #4f7d68;
   --danger: #b95850;
   --shadow: 0 18px 45px rgba(42, 70, 59, 0.1);
@@ -119,6 +120,7 @@
   --accent-strong: #96bcc0;
   --accent-soft: #3b5660;
   --accent-text: #172932;
+  --event-text: #edf4f3;
   --today-ring: #a8ced0;
   --danger: #ef9188;
   --shadow: 0 18px 52px rgba(7, 16, 23, 0.22);
@@ -264,7 +266,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .day-cell:hover .cell-add, .cell-add:focus-visible { opacity: 1; }
 .cell-add:hover { background: var(--accent-soft); color: var(--accent-strong); }
 .event-stack { min-width: 0; display: grid; gap: 3px; }
-.event-chip { width: 100%; min-width: 0; height: 21px; padding: 2px 5px; display: flex; align-items: center; gap: 4px; overflow: hidden; border: 0; border-left: 3px solid color-mix(in srgb, var(--event-color) 72%, #000); border-radius: 5px; background: color-mix(in srgb, var(--event-color) 34%, var(--surface-solid)); color: #17382b; text-align: left; cursor: pointer; }
+.event-chip { width: 100%; min-width: 0; height: 21px; padding: 2px 5px; display: flex; align-items: center; gap: 4px; overflow: hidden; border: 0; border-left: 3px solid color-mix(in srgb, var(--event-color) 72%, #000); border-radius: 5px; background: color-mix(in srgb, var(--event-color) 34%, var(--surface-solid)); color: var(--event-text); text-align: left; cursor: pointer; }
 .event-chip:hover { filter: saturate(1.1) brightness(.98); }
 .event-time { flex: 0 0 auto; opacity: .72; font-family: var(--font-ui); font-size: .6rem; }
 .event-title { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
@@ -318,7 +320,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .color-dot { width: 23px; height: 23px; padding: 0; border: 3px solid var(--surface-solid); border-radius: 50%; box-shadow: 0 0 0 1px var(--border-strong); cursor: pointer; }
 .color-dot.active { box-shadow: 0 0 0 2px var(--today-ring); }
 .color-panel .color-row { margin-top: 2px; }
-.event-preview { min-height: 31px; margin-top: 12px; padding: 6px 9px; display: flex; align-items: center; gap: 8px; overflow: hidden; border-left: 4px solid color-mix(in srgb, var(--event-color) 72%, #000); border-radius: 7px; background: color-mix(in srgb, var(--event-color) 34%, var(--surface-solid)); color: #17382b; white-space: nowrap; text-overflow: ellipsis; }
+.event-preview { min-height: 31px; margin-top: 12px; padding: 6px 9px; display: flex; align-items: center; gap: 8px; overflow: hidden; border-left: 4px solid color-mix(in srgb, var(--event-color) 72%, #000); border-radius: 7px; background: color-mix(in srgb, var(--event-color) 34%, var(--surface-solid)); color: var(--event-text); white-space: nowrap; text-overflow: ellipsis; }
 .event-preview span { opacity: .7; font-family: var(--font-ui); font-size: .66rem; }
 .form-error { margin: 0; padding: 9px 11px; border-radius: 9px; background: color-mix(in srgb, var(--danger) 10%, transparent); color: var(--danger); font-size: .72rem; }
 .dialog-footer { min-height: 68px; justify-content: space-between; gap: 12px; padding: 12px 23px; border-top: 1px solid var(--border); background: var(--surface-soft); }
