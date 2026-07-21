@@ -19,6 +19,10 @@ try {
     New-Item -ItemType Directory -Path $stagingPath | Out-Null
     New-Item -ItemType Directory -Path (Join-Path $stagingPath "data") | Out-Null
     Copy-Item -LiteralPath $executablePath -Destination (Join-Path $stagingPath "koyomado.exe")
+    Copy-Item -LiteralPath (Join-Path $projectRoot "LICENSE.txt") -Destination (Join-Path $stagingPath "LICENSE.txt")
+    Copy-Item -LiteralPath (Join-Path $projectRoot "CHANGELOG.md") -Destination (Join-Path $stagingPath "CHANGELOG.md")
+    Copy-Item -LiteralPath (Join-Path $projectRoot "THIRD_PARTY_NOTICES.md") -Destination (Join-Path $stagingPath "THIRD_PARTY_NOTICES.md")
+    Copy-Item -LiteralPath (Join-Path $projectRoot "src\assets\fonts\OFL.txt") -Destination (Join-Path $stagingPath "LINE_Seed_JP_OFL.txt")
 
     @(
         "このフォルダーに予定と設定が保存されます。"
@@ -33,6 +37,12 @@ try {
         "3. 予定と設定は同じ場所の data フォルダーへ保存されます。"
         "4. 更新時は data フォルダーを残し、実行ファイルだけ差し替えてください。"
         "5. Google Drive上では複数PCから同時に起動しないでください。"
+        "6. 本アプリはコード署名を行っていません。公式ページから入手し、必要に応じてSHA-256を確認してください。"
+        ""
+        "公式ページ: https://ytec.cloudfree.jp/ytb/koyomado/"
+        "利用条件: LICENSE.txt"
+        "更新履歴: CHANGELOG.md"
+        "第三者ライセンス: THIRD_PARTY_NOTICES.md / LINE_Seed_JP_OFL.txt"
     ) | Set-Content -LiteralPath (Join-Path $stagingPath "はじめに.txt") -Encoding UTF8
 
     if (Test-Path -LiteralPath $archivePath) {

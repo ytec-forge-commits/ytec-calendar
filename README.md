@@ -61,6 +61,8 @@ npm run tauri:portable
 
 `release/koyomado-v<version>-windows-portable.zip` を生成します。初回はZIPを展開して `koyomado.exe` を起動してください。更新時は既存の `data` フォルダーを残し、実行ファイルだけを差し替えます。
 
+配布ZIPには、利用条件の `LICENSE.txt`、更新履歴の `CHANGELOG.md`、第三者ライセンス案内の `THIRD_PARTY_NOTICES.md`、LINE Seed JPのライセンス全文を同梱します。
+
 ### Y-TEC Calendarから更新する場合
 
 1. 旧アプリの設定でWindows自動起動をOFFにし、タスクトレイから終了します。
@@ -82,3 +84,10 @@ Google Drive上で使う場合、同じフォルダーを複数PCから同時に
 - `data/window-state.backup.json`: 直前の位置情報
 
 予定の削除は画面上から見えなくするソフトデリートです。削除済みデータは `deletedEvents` に残ります。
+
+## 公開・利用条件
+
+- 公式ページ: https://ytec.cloudfree.jp/ytb/koyomado/
+- 個人・法人を問わず無料で利用できます。詳しい条件は `LICENSE.txt` を確認してください。
+- 配布実行ファイルにはコード署名がありません。公式ページから入手し、掲載されたSHA-256と照合してください。
+- Koyomadoアプリには外部通信、広告、アクセス解析、認証、クラウド同期はありません。
