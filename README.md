@@ -61,7 +61,13 @@ npm run tauri:portable
 
 `release/koyomado-v<version>-windows-portable.zip` を生成します。初回はZIPを展開して `koyomado.exe` を起動してください。更新時は既存の `data` フォルダーを残し、実行ファイルだけを差し替えます。
 
-配布ZIPには、利用条件の `LICENSE.txt`、更新履歴の `CHANGELOG.md`、第三者ライセンス案内の `THIRD_PARTY_NOTICES.md`、LINE Seed JPのライセンス全文を同梱します。
+配布ZIPには、画面例付きの `Koyomado操作説明書.pdf`、利用条件の `LICENSE.txt`、更新履歴の `CHANGELOG.md`、第三者ライセンス案内の `THIRD_PARTY_NOTICES.md`、LINE Seed JPのライセンス全文を同梱します。操作説明書は公式紹介ページからも閲覧できます。
+
+操作説明書を更新するときは、Windows標準のBIZ UDPゴシックとReportLabを利用して生成します。
+
+```powershell
+python scripts/generate-operation-manual.py
+```
 
 ### Y-TEC Calendarから更新する場合
 

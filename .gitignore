@@ -6,6 +6,8 @@ release/
 output/playwright/
 output/imagegen/
 output/native-smoke-*/
+output/pdf/
+tmp/
 *.log
 .DS_Store
 data/calendar-data.json

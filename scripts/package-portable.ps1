@@ -23,6 +23,7 @@ try {
     Copy-Item -LiteralPath (Join-Path $projectRoot "CHANGELOG.md") -Destination (Join-Path $stagingPath "CHANGELOG.md")
     Copy-Item -LiteralPath (Join-Path $projectRoot "THIRD_PARTY_NOTICES.md") -Destination (Join-Path $stagingPath "THIRD_PARTY_NOTICES.md")
     Copy-Item -LiteralPath (Join-Path $projectRoot "src\assets\fonts\OFL.txt") -Destination (Join-Path $stagingPath "LINE_Seed_JP_OFL.txt")
+    Copy-Item -LiteralPath (Join-Path $projectRoot "docs\Koyomado操作説明書.pdf") -Destination (Join-Path $stagingPath "Koyomado操作説明書.pdf")
 
     @(
         "このフォルダーに予定と設定が保存されます。"
@@ -39,6 +40,7 @@ try {
         "5. Google Drive上では複数PCから同時に起動しないでください。"
         "6. 本アプリはコード署名を行っていません。公式ページから入手し、必要に応じてSHA-256を確認してください。"
         ""
+        "操作説明書: Koyomado操作説明書.pdf"
         "公式ページ: https://ytec.cloudfree.jp/ytb/koyomado/"
         "利用条件: LICENSE.txt"
         "更新履歴: CHANGELOG.md"
