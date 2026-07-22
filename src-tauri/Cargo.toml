@@ -1,6 +1,6 @@
 [package]
 name = "koyomado"
-version = "0.1.6"
+version = "0.1.7"
 description = "持ち運べるWindows用カレンダー"
 authors = ["Y-TEC"]
 edition = "2021"

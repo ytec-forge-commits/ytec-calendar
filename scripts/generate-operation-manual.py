@@ -30,7 +30,7 @@ from reportlab.platypus import (
 ROOT = Path(__file__).resolve().parents[1]
 ASSET_DIR = ROOT / "docs" / "manual-assets"
 VERSION = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))["version"]
-RELEASE_DATE = "2026年7月22日"
+RELEASE_DATE = "2026年7月23日"
 OFFICIAL_URL = "https://ytec.cloudfree.jp/ytb/koyomado/"
 
 PAGE_W, PAGE_H = A4
@@ -341,8 +341,8 @@ def build_story(styles: dict[str, ParagraphStyle]) -> list:
         screenshot("calendar.png", 155 * mm),
         Spacer(1, 4 * mm),
         two_cards([
-            ("1  月を移動", "上部の左右矢印で前月・翌月へ移動。「今日」で今月へ戻ります。"),
-            ("2  予定を追加", "右上の「予定を追加」、日付内の＋、左側の「今日の予定を追加」から登録できます。"),
+            ("1  月を移動", "上部の左右矢印で前月・翌月へ移動。「今日」は、押した時点の現在日へ戻ります。"),
+            ("2  予定を追加", "予定がない日付を左クリックするか、右上・日付内・左側の追加ボタンから登録できます。"),
         ], styles, [PURPLE_PALE, GREEN_PALE]),
         Spacer(1, 3 * mm),
         two_cards([
@@ -382,7 +382,7 @@ def build_story(styles: dict[str, ParagraphStyle]) -> list:
         Spacer(1, 4 * mm),
         two_cards([
             ("編集する", "カレンダー上の予定を左クリックするか、日の予定一覧から選ぶと編集画面が開きます。「変更を保存」で反映します。"),
-            ("削除する", "編集画面左下の「削除」を選び、確認画面で確定します。予定は画面から消えますが、復旧用として保存データ内には削除済み記録が残ります。"),
+            ("削除する", "編集画面左下、または予定の右クリックメニューから「削除」を選び、確認画面で確定します。削除済み記録は保存データ内に残ります。"),
         ], styles, [SKY_PALE, ROSE_PALE]),
         Spacer(1, 3 * mm),
         card("同じ日に予定が多い場合", "月表示に収まらない予定は「ほか○件」とまとめて表示します。日付を選ぶと一覧ですべて確認でき、5件以上登録した場合もここから編集できます。", styles, GREEN_PALE),
@@ -541,8 +541,8 @@ def build_story(styles: dict[str, ParagraphStyle]) -> list:
         Spacer(1, 4 * mm),
         p("操作早見表", styles["h2"]),
         two_cards([
-            ("左クリック", "予定: 編集<br/>予定がある日付: 日の一覧<br/>トレイアイコン: 再表示"),
-            ("右クリック", "予定: コピー・編集<br/>日付: 貼り付け・追加<br/>トレイ: 表示・終了"),
+            ("左クリック", "予定: 編集<br/>空の日付: 予定を追加<br/>予定がある日付: 日の一覧<br/>トレイアイコン: 再表示"),
+            ("右クリック", "予定: コピー・編集・削除<br/>日付: 貼り付け・追加<br/>トレイ: 表示・終了"),
             ("ドラッグ", "通常: 予定を移動<br/>Ctrlを押しながら: 予定をコピー"),
         ], styles, [PURPLE_PALE, GREEN_PALE, SKY_PALE]),
         Spacer(1, 4 * mm),

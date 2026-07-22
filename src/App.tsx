@@ -6,6 +6,7 @@ import {
   formatEventTime,
   getHolidayMap,
   getMonthCells,
+  getTodayView,
   isValidTimeRange,
   longDateLabel,
   monthTitle,
@@ -68,7 +69,7 @@ function createDraft(date: string, event?: CalendarEvent): CalendarEvent {
 }
 
 function App() {
-  const today = useMemo(() => new Date(), []);
+  const [today, setToday] = useState(() => new Date());
   const todayKey = toDateKey(today);
   const [data, setData] = useState<AppData | null>(null);
   const [displayMonth, setDisplayMonth] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
@@ -84,6 +85,34 @@ function App() {
 
   useEffect(() => {
     loadAppData().then(setData).catch((error: unknown) => setLoadError(String(error)));
+  }, []);
+
+  useEffect(() => {
+    let midnightTimer = 0;
+    const refreshToday = () => {
+      const current = getTodayView();
+      setToday((previous) => toDateKey(previous) === current.dateKey ? previous : current.date);
+    };
+    const scheduleMidnightRefresh = () => {
+      const now = new Date();
+      const nextDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+      midnightTimer = window.setTimeout(() => {
+        refreshToday();
+        scheduleMidnightRefresh();
+      }, Math.max(1000, nextDay.getTime() - now.getTime() + 250));
+    };
+    const refreshWhenVisible = () => {
+      if (!document.hidden) refreshToday();
+    };
+
+    scheduleMidnightRefresh();
+    window.addEventListener("focus", refreshToday);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      window.clearTimeout(midnightTimer);
+      window.removeEventListener("focus", refreshToday);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
   }, []);
 
   useEffect(() => {
@@ -184,6 +213,14 @@ function App() {
     await saveEvent(pasteEventContent(createDraft(date), copiedContent));
   };
 
+  const goToToday = () => {
+    const current = getTodayView();
+    setToday(current.date);
+    setDisplayMonth(current.displayMonth);
+    setSelectedDate(current.dateKey);
+    setContextMenu(null);
+  };
+
   const startEventDrag = (dragEvent: ReactDragEvent<HTMLButtonElement>, event: CalendarEvent) => {
     dragEvent.stopPropagation();
     dragEvent.dataTransfer.effectAllowed = "copyMove";
@@ -255,7 +292,7 @@ function App() {
     mouseEvent.preventDefault();
     mouseEvent.stopPropagation();
     const menuWidth = 224;
-    const menuHeight = target.kind === "event" ? 126 : 142;
+    const menuHeight = target.kind === "event" ? 165 : 142;
     setContextMenu({
       ...target,
       x: Math.max(8, Math.min(mouseEvent.clientX, window.innerWidth - menuWidth - 8)),
@@ -266,7 +303,11 @@ function App() {
   const selectDate = (date: string, events: CalendarEvent[]) => {
     setSelectedDate(date);
     setContextMenu(null);
-    if (events.length > 0) setAgendaDate(date);
+    if (events.length > 0) {
+      setAgendaDate(date);
+    } else {
+      openNewEvent(date);
+    }
   };
 
   const updateSettings = async (settings: AppData["settings"]) => {
@@ -306,7 +347,7 @@ function App() {
 
         <nav className="month-nav" aria-label="月の移動">
           <button className="icon-button" onClick={() => setDisplayMonth(shiftMonth(displayMonth, -1))} aria-label="前の月">‹</button>
-          <button className="today-button" onClick={() => { setDisplayMonth(new Date(today.getFullYear(), today.getMonth(), 1)); setSelectedDate(todayKey); }}>今日</button>
+          <button className="today-button" onClick={goToToday}>今日</button>
           <button className="icon-button" onClick={() => setDisplayMonth(shiftMonth(displayMonth, 1))} aria-label="次の月">›</button>
           <h2>{monthTitle(displayMonth)}</h2>
         </nav>
@@ -488,6 +529,7 @@ function App() {
               <p className="context-menu-title" title={contextMenu.event.title}>{contextMenu.event.title}</p>
               <button role="menuitem" onClick={() => copyEvent(contextMenu.event)}>内容をコピー</button>
               <button role="menuitem" onClick={() => { setContextMenu(null); setSelectedDate(contextMenu.event.date); setEditing(contextMenu.event); }}>編集</button>
+              <button className="context-menu-delete" role="menuitem" onClick={() => { const event = contextMenu.event; setContextMenu(null); void deleteEvent(event); }}>削除</button>
             </>
           ) : (
             <>

@@ -344,6 +344,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .calendar-context-menu button { min-height: 36px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; color: var(--text); text-align: left; cursor: pointer; font-size: .72rem; font-weight: 700; }
 .calendar-context-menu button:hover:not(:disabled), .calendar-context-menu button:focus-visible { background: var(--surface-hover); }
 .calendar-context-menu button:disabled { color: var(--text-faint); cursor: default; }
+.calendar-context-menu .context-menu-delete { margin-top: 3px; border-top: 1px solid var(--border); border-radius: 0 0 8px 8px; color: var(--danger); }
 
 .loading-state, .fatal-state { min-height: 100vh; display: grid; place-items: center; align-content: center; gap: 12px; padding: 24px; text-align: center; }
 .loading-state p { margin: 0; color: var(--text-soft); font-size: .85rem; }

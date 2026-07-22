@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { copyEventContent, duplicateEventToDate, eventsForDate, getHolidayMap, getMonthCells, isValidTimeRange, moveEventToDate, pasteEventContent, shiftMonth, toDateKey, upcomingEvents } from "./calendar";
+import { describe, expect, it, vi } from "vitest";
+import { copyEventContent, duplicateEventToDate, eventsForDate, getHolidayMap, getMonthCells, getTodayView, isValidTimeRange, moveEventToDate, pasteEventContent, shiftMonth, toDateKey, upcomingEvents } from "./calendar";
 import type { CalendarEvent } from "../types";
 import { DEFAULT_EVENT_STYLE } from "../types";
 
@@ -29,6 +29,21 @@ describe("calendar utilities", () => {
 
   it("日付キーはローカル日付を維持する", () => {
     expect(toDateKey(new Date(2026, 0, 5))).toBe("2026-01-05");
+  });
+
+  it("今日の表示先は呼び出した時点の現在日を使う", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date(2026, 6, 22, 23, 59));
+      expect(getTodayView()).toMatchObject({ dateKey: "2026-07-22" });
+
+      vi.setSystemTime(new Date(2026, 6, 23, 0, 1));
+      const nextDay = getTodayView();
+      expect(nextDay).toMatchObject({ dateKey: "2026-07-23" });
+      expect(toDateKey(nextDay.displayMonth)).toBe("2026-07-01");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("終日予定を先頭にして時刻順に並べる", () => {

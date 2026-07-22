@@ -24,6 +24,14 @@ export function longDateLabel(date: Date): string {
   }).format(date);
 }
 
+export function getTodayView(now = new Date()): { date: Date; dateKey: string; displayMonth: Date } {
+  return {
+    date: now,
+    dateKey: toDateKey(now),
+    displayMonth: new Date(now.getFullYear(), now.getMonth(), 1),
+  };
+}
+
 export function getMonthCells(displayMonth: Date, today = new Date()): DayCell[] {
   const first = new Date(displayMonth.getFullYear(), displayMonth.getMonth(), 1);
   const start = new Date(first);
