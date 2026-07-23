@@ -13,7 +13,8 @@ use tauri::{
 };
 
 const CALENDAR_DATA_VERSION: u32 = 2;
-const WINDOW_STATE_VERSION: u32 = 1;
+const WINDOW_STATE_VERSION: u32 = 2;
+const MAX_WINDOW_PROFILES: usize = 12;
 const MIN_WINDOW_HEIGHT: u32 = 600;
 const EXPANDED_MIN_WINDOW_WIDTH: u32 = 806;
 const COLLAPSED_MIN_WINDOW_WIDTH: u32 = 375;
@@ -82,10 +83,9 @@ impl Default for AppData {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct WindowState {
-    version: u32,
+struct WindowPlacement {
     x: i32,
     y: i32,
     width: u32,
@@ -93,10 +93,9 @@ struct WindowState {
     maximized: bool,
 }
 
-impl Default for WindowState {
+impl Default for WindowPlacement {
     fn default() -> Self {
         Self {
-            version: WINDOW_STATE_VERSION,
             x: 80,
             y: 60,
             width: 960,
@@ -106,9 +105,78 @@ impl Default for WindowState {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WindowProfile {
+    layout_id: String,
+    #[serde(flatten)]
+    placement: WindowPlacement,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WindowStateFile {
+    version: u32,
+    profiles: Vec<WindowProfile>,
+}
+
+impl Default for WindowStateFile {
+    fn default() -> Self {
+        Self {
+            version: WINDOW_STATE_VERSION,
+            profiles: Vec::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct LegacyWindowState {
+    version: u32,
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
+    maximized: bool,
+}
+
+impl From<LegacyWindowState> for WindowPlacement {
+    fn from(value: LegacyWindowState) -> Self {
+        Self {
+            x: value.x,
+            y: value.y,
+            width: value.width,
+            height: value.height,
+            maximized: value.maximized,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+enum WindowStateOnDisk {
+    Current(WindowStateFile),
+    Legacy(LegacyWindowState),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct MonitorGeometry {
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
+    work_x: i32,
+    work_y: i32,
+    work_width: u32,
+    work_height: u32,
+    scale_milli: u32,
+}
+
 struct TrackedWindow {
-    state: WindowState,
+    layout_id: String,
+    state: WindowPlacement,
     last_saved: Instant,
+    restoring: bool,
 }
 
 struct WindowTracker(Mutex<TrackedWindow>);
@@ -283,43 +351,308 @@ fn set_sidebar_window_mode(window: tauri::WebviewWindow, collapsed: bool) -> Res
     apply_sidebar_window_mode(&window, collapsed)
 }
 
-fn load_window_state() -> Option<WindowState> {
-    let path = portable_data_dir().ok()?.join("window-state.json");
-    read_json_with_recovery(&path)
-        .ok()
-        .flatten()
-        .filter(|state: &WindowState| state.version == WINDOW_STATE_VERSION)
-}
-
-fn save_window_state(state: &WindowState) {
-    if let Ok(path) = portable_data_dir().map(|directory| directory.join("window-state.json")) {
-        let _ = write_json_with_backup(&path, state);
-    }
-}
-
-fn state_is_visible<R: tauri::Runtime>(
+fn monitor_geometries<R: tauri::Runtime>(
     window: &tauri::WebviewWindow<R>,
-    state: &WindowState,
-) -> bool {
+) -> Result<Vec<MonitorGeometry>, String> {
     window
         .available_monitors()
         .map(|monitors| {
-            monitors.iter().any(|monitor| {
-                let position = monitor.position();
-                let size = monitor.size();
-                let right = position.x.saturating_add(size.width as i32);
-                let bottom = position.y.saturating_add(size.height as i32);
-                state.x < right - 80
-                    && state.y < bottom - 60
-                    && state.x.saturating_add(state.width as i32) > position.x + 80
-                    && state.y.saturating_add(state.height as i32) > position.y + 60
-            })
+            monitors
+                .iter()
+                .map(|monitor| {
+                    let position = monitor.position();
+                    let size = monitor.size();
+                    let work_area = monitor.work_area();
+                    MonitorGeometry {
+                        x: position.x,
+                        y: position.y,
+                        width: size.width,
+                        height: size.height,
+                        work_x: work_area.position.x,
+                        work_y: work_area.position.y,
+                        work_width: work_area.size.width,
+                        work_height: work_area.size.height,
+                        scale_milli: (monitor.scale_factor() * 1000.0).round() as u32,
+                    }
+                })
+                .collect()
         })
-        .unwrap_or(false)
+        .map_err(|error| format!("モニター構成を確認できません: {error}"))
+}
+
+fn monitor_layout_id(monitors: &[MonitorGeometry]) -> String {
+    let mut sorted = monitors.to_vec();
+    sorted.sort_by(|left, right| {
+        (
+            left.x,
+            left.y,
+            left.width,
+            left.height,
+            left.work_x,
+            left.work_y,
+            left.work_width,
+            left.work_height,
+            left.scale_milli,
+        )
+            .cmp(&(
+                right.x,
+                right.y,
+                right.width,
+                right.height,
+                right.work_x,
+                right.work_y,
+                right.work_width,
+                right.work_height,
+                right.scale_milli,
+            ))
+    });
+
+    let mut hash = 0xcbf29ce484222325_u64;
+    for monitor in &sorted {
+        let value = format!(
+            "{}:{}:{}:{}:{}:{}:{}:{}:{};",
+            monitor.x,
+            monitor.y,
+            monitor.width,
+            monitor.height,
+            monitor.work_x,
+            monitor.work_y,
+            monitor.work_width,
+            monitor.work_height,
+            monitor.scale_milli
+        );
+        for byte in value.as_bytes() {
+            hash ^= u64::from(*byte);
+            hash = hash.wrapping_mul(0x100000001b3);
+        }
+    }
+    format!("layout-{}-{hash:016x}", sorted.len())
+}
+
+fn current_monitor_layout<R: tauri::Runtime>(
+    window: &tauri::WebviewWindow<R>,
+) -> Result<(String, Vec<MonitorGeometry>), String> {
+    let monitors = monitor_geometries(window)?;
+    let layout_id = monitor_layout_id(&monitors);
+    Ok((layout_id, monitors))
+}
+
+fn fit_window_placement(
+    monitors: &[MonitorGeometry],
+    placement: &WindowPlacement,
+    min_width: u32,
+) -> Option<WindowPlacement> {
+    let window_left = i64::from(placement.x);
+    let window_top = i64::from(placement.y);
+    let window_right = window_left + i64::from(placement.width);
+    let window_bottom = window_top + i64::from(placement.height);
+
+    let monitor = monitors
+        .iter()
+        .map(|monitor| {
+            let monitor_left = i64::from(monitor.work_x);
+            let monitor_top = i64::from(monitor.work_y);
+            let monitor_right = monitor_left + i64::from(monitor.work_width);
+            let monitor_bottom = monitor_top + i64::from(monitor.work_height);
+            let width = window_right.min(monitor_right) - window_left.max(monitor_left);
+            let height = window_bottom.min(monitor_bottom) - window_top.max(monitor_top);
+            let area = width.max(0) * height.max(0);
+            (area, monitor)
+        })
+        .max_by_key(|(area, _)| *area)
+        .and_then(|(area, monitor)| (area > 0).then_some(monitor))?;
+
+    let width = placement
+        .width
+        .max(min_width)
+        .min(monitor.work_width.max(min_width));
+    let height = placement
+        .height
+        .max(MIN_WINDOW_HEIGHT)
+        .min(monitor.work_height.max(MIN_WINDOW_HEIGHT));
+    let max_x = if width <= monitor.work_width {
+        monitor
+            .work_x
+            .saturating_add((monitor.work_width - width) as i32)
+    } else {
+        monitor.work_x
+    };
+    let max_y = if height <= monitor.work_height {
+        monitor
+            .work_y
+            .saturating_add((monitor.work_height - height) as i32)
+    } else {
+        monitor.work_y
+    };
+
+    Some(WindowPlacement {
+        x: placement.x.clamp(monitor.work_x, max_x),
+        y: placement.y.clamp(monitor.work_y, max_y),
+        width,
+        height,
+        maximized: placement.maximized,
+    })
+}
+
+fn load_window_state_file(layout_id: &str) -> WindowStateFile {
+    let Ok(path) = portable_data_dir().map(|directory| directory.join("window-state.json")) else {
+        return WindowStateFile::default();
+    };
+    let loaded: Option<WindowStateOnDisk> = read_json_with_recovery(&path).ok().flatten();
+
+    match loaded {
+        Some(WindowStateOnDisk::Current(state)) if state.version == WINDOW_STATE_VERSION => state,
+        Some(WindowStateOnDisk::Legacy(legacy)) if legacy.version == 1 => {
+            let legacy_backup = path.with_file_name("window-state.v1.backup.json");
+            if path.exists() && !legacy_backup.exists() {
+                let _ = fs::copy(&path, legacy_backup);
+            }
+            let state = WindowStateFile {
+                version: WINDOW_STATE_VERSION,
+                profiles: vec![WindowProfile {
+                    layout_id: layout_id.to_string(),
+                    placement: legacy.into(),
+                }],
+            };
+            let _ = write_json_with_backup(&path, &state);
+            state
+        }
+        _ => WindowStateFile::default(),
+    }
+}
+
+fn upsert_window_profile(
+    mut state_file: WindowStateFile,
+    layout_id: &str,
+    placement: &WindowPlacement,
+) -> WindowStateFile {
+    state_file.version = WINDOW_STATE_VERSION;
+    state_file
+        .profiles
+        .retain(|profile| profile.layout_id != layout_id);
+    state_file.profiles.push(WindowProfile {
+        layout_id: layout_id.to_string(),
+        placement: placement.clone(),
+    });
+    if state_file.profiles.len() > MAX_WINDOW_PROFILES {
+        let excess = state_file.profiles.len() - MAX_WINDOW_PROFILES;
+        state_file.profiles.drain(0..excess);
+    }
+    state_file
+}
+
+fn load_window_placement(layout_id: &str) -> Option<WindowPlacement> {
+    load_window_state_file(layout_id)
+        .profiles
+        .into_iter()
+        .find(|profile| profile.layout_id == layout_id)
+        .map(|profile| profile.placement)
+}
+
+fn save_window_state(layout_id: &str, placement: &WindowPlacement) {
+    if let Ok(path) = portable_data_dir().map(|directory| directory.join("window-state.json")) {
+        let state_file =
+            upsert_window_profile(load_window_state_file(layout_id), layout_id, placement);
+        let _ = write_json_with_backup(&path, &state_file);
+    }
+}
+
+fn capture_window_placement<R: tauri::Runtime>(
+    window: &tauri::WebviewWindow<R>,
+    maximized: bool,
+) -> WindowPlacement {
+    let position = window
+        .outer_position()
+        .unwrap_or(PhysicalPosition::new(80, 60));
+    let size = window.outer_size().unwrap_or(PhysicalSize::new(960, 620));
+    WindowPlacement {
+        x: position.x,
+        y: position.y,
+        width: size.width,
+        height: size.height,
+        maximized,
+    }
+}
+
+fn restore_window_for_layout<R: tauri::Runtime>(
+    window: &tauri::WebviewWindow<R>,
+    layout_id: &str,
+    monitors: &[MonitorGeometry],
+    min_width: u32,
+) -> Result<WindowPlacement, String> {
+    if window.is_maximized().unwrap_or(false) {
+        window
+            .unmaximize()
+            .map_err(|error| format!("ウィンドウを通常表示へ戻せません: {error}"))?;
+    }
+
+    let placement = load_window_placement(layout_id)
+        .as_ref()
+        .and_then(|saved| fit_window_placement(monitors, saved, min_width));
+
+    let placement = if let Some(placement) = placement {
+        window
+            .set_size(PhysicalSize::new(placement.width, placement.height))
+            .map_err(|error| format!("保存したウィンドウサイズへ戻せません: {error}"))?;
+        window
+            .set_position(PhysicalPosition::new(placement.x, placement.y))
+            .map_err(|error| format!("保存したウィンドウ位置へ戻せません: {error}"))?;
+        placement
+    } else {
+        let default = WindowPlacement::default();
+        window
+            .set_size(PhysicalSize::new(
+                default.width.max(min_width),
+                default.height.max(MIN_WINDOW_HEIGHT),
+            ))
+            .map_err(|error| format!("既定のウィンドウサイズへ戻せません: {error}"))?;
+        window
+            .center()
+            .map_err(|error| format!("ウィンドウを画面中央へ戻せません: {error}"))?;
+        capture_window_placement(window, false)
+    };
+
+    if placement.maximized {
+        window
+            .maximize()
+            .map_err(|error| format!("最大化状態へ戻せません: {error}"))?;
+    }
+    Ok(placement)
 }
 
 fn show_main_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     if let Some(window) = app.get_webview_window("main") {
+        if let Ok((layout_id, monitors)) = current_monitor_layout(&window) {
+            let should_restore = app
+                .state::<WindowTracker>()
+                .0
+                .lock()
+                .map(|tracked| tracked.layout_id != layout_id)
+                .unwrap_or(false);
+            if should_restore {
+                if let Ok(mut tracked) = app.state::<WindowTracker>().0.lock() {
+                    tracked.restoring = true;
+                }
+                let sidebar_collapsed = load_app_data_inner()
+                    .map(|data| data.settings.sidebar_collapsed)
+                    .unwrap_or(false);
+                let restored = restore_window_for_layout(
+                    &window,
+                    &layout_id,
+                    &monitors,
+                    sidebar_min_width(sidebar_collapsed),
+                );
+                if let Ok(mut tracked) = app.state::<WindowTracker>().0.lock() {
+                    if let Ok(placement) = restored {
+                        tracked.layout_id = layout_id.clone();
+                        tracked.state = placement.clone();
+                        tracked.last_saved = Instant::now();
+                        save_window_state(&layout_id, &placement);
+                    }
+                    tracked.restoring = false;
+                }
+            }
+        }
         let _ = window.show();
         let _ = window.unminimize();
         let _ = window.set_focus();
@@ -330,8 +663,10 @@ fn show_main_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
 pub fn run() {
     tauri::Builder::default()
         .manage(WindowTracker(Mutex::new(TrackedWindow {
-            state: WindowState::default(),
+            layout_id: String::new(),
+            state: WindowPlacement::default(),
             last_saved: Instant::now(),
+            restoring: true,
         })))
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
@@ -375,71 +710,74 @@ pub fn run() {
                 let min_width = sidebar_min_width(sidebar_collapsed);
                 window.set_min_size(Some(PhysicalSize::new(min_width, MIN_WINDOW_HEIGHT)))?;
 
-                if let Some(state) = load_window_state() {
-                    if state_is_visible(&window, &state) {
-                        window.set_position(PhysicalPosition::new(state.x, state.y))?;
-                        window.set_size(PhysicalSize::new(
-                            state.width.max(min_width),
-                            state.height.max(MIN_WINDOW_HEIGHT),
-                        ))?;
-                    } else {
-                        window.center()?;
-                    }
-                    if state.maximized {
-                        window.maximize()?;
-                    }
-                }
-
-                let position = window
-                    .outer_position()
-                    .unwrap_or(PhysicalPosition::new(80, 60));
-                let size = window.outer_size().unwrap_or(PhysicalSize::new(960, 620));
-                let maximized = window.is_maximized().unwrap_or(false);
+                let (layout_id, monitors) =
+                    current_monitor_layout(&window).map_err(std::io::Error::other)?;
+                let placement =
+                    restore_window_for_layout(&window, &layout_id, &monitors, min_width)
+                        .map_err(std::io::Error::other)?;
                 if let Ok(mut tracked) = app.state::<WindowTracker>().0.lock() {
-                    tracked.state = WindowState {
-                        version: WINDOW_STATE_VERSION,
-                        x: position.x,
-                        y: position.y,
-                        width: size.width,
-                        height: size.height,
-                        maximized,
-                    };
+                    tracked.layout_id = layout_id.clone();
+                    tracked.state = placement.clone();
+                    tracked.last_saved = Instant::now();
+                    tracked.restoring = false;
                 }
+                save_window_state(&layout_id, &placement);
             }
             Ok(())
         })
         .on_window_event(|window, event| {
-            let tracker = window.state::<WindowTracker>();
-            let Ok(mut tracked) = tracker.0.lock() else {
-                return;
-            };
-            let maximized = window.is_maximized().unwrap_or(false);
-            tracked.state.maximized = maximized;
-
-            match event {
-                WindowEvent::Moved(position) if !maximized => {
-                    tracked.state.x = position.x;
-                    tracked.state.y = position.y;
-                }
-                WindowEvent::Resized(size) if !maximized => {
-                    tracked.state.width = size.width;
-                    tracked.state.height = size.height;
-                }
-                _ => {}
-            }
-
-            let final_event = matches!(
-                event,
-                WindowEvent::CloseRequested { .. } | WindowEvent::Focused(false)
-            );
-            if final_event || tracked.last_saved.elapsed() >= Duration::from_millis(700) {
-                save_window_state(&tracked.state);
-                tracked.last_saved = Instant::now();
-            }
-
             if let WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
                 let _ = window.hide();
+            }
+
+            let tracker = window.state::<WindowTracker>();
+            let maximized = window.is_maximized().unwrap_or(false);
+            let save_candidate = {
+                let Ok(mut tracked) = tracker.0.lock() else {
+                    return;
+                };
+                if tracked.restoring {
+                    return;
+                }
+
+                tracked.state.maximized = maximized;
+                match event {
+                    WindowEvent::Moved(position) if !maximized => {
+                        tracked.state.x = position.x;
+                        tracked.state.y = position.y;
+                    }
+                    WindowEvent::Resized(size) if !maximized => {
+                        tracked.state.width = size.width;
+                        tracked.state.height = size.height;
+                    }
+                    _ => {}
+                }
+
+                let final_event = matches!(
+                    event,
+                    WindowEvent::CloseRequested { .. } | WindowEvent::Focused(false)
+                );
+                if !tracked.layout_id.is_empty()
+                    && (final_event || tracked.last_saved.elapsed() >= Duration::from_millis(700))
+                {
+                    tracked.last_saved = Instant::now();
+                    Some((tracked.layout_id.clone(), tracked.state.clone()))
+                } else {
+                    None
+                }
+            };
+
+            if let Some((layout_id, placement)) = save_candidate {
+                let layout_is_current = window
+                    .app_handle()
+                    .get_webview_window("main")
+                    .and_then(|webview_window| current_monitor_layout(&webview_window).ok())
+                    .map(|(current_layout_id, _)| current_layout_id == layout_id)
+                    .unwrap_or(false);
+                if layout_is_current {
+                    save_window_state(&layout_id, &placement);
+                }
             }
         })
         .invoke_handler(tauri::generate_handler![
@@ -455,6 +793,20 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn monitor(x: i32, width: u32) -> MonitorGeometry {
+        MonitorGeometry {
+            x,
+            y: 0,
+            width,
+            height: 1080,
+            work_x: x,
+            work_y: 0,
+            work_width: width,
+            work_height: 1040,
+            scale_milli: 1000,
+        }
+    }
 
     #[test]
     fn default_data_uses_current_version() {
@@ -496,12 +848,132 @@ mod tests {
     #[test]
     fn minimum_window_height_keeps_the_full_calendar_visible() {
         assert_eq!(MIN_WINDOW_HEIGHT, 600);
-        assert_eq!(WindowState::default().version, WINDOW_STATE_VERSION);
+        assert_eq!(WindowStateFile::default().version, WINDOW_STATE_VERSION);
+        assert_eq!(WindowPlacement::default().height, MIN_WINDOW_HEIGHT + 20);
     }
 
     #[test]
     fn sidebar_state_controls_the_minimum_window_width() {
         assert_eq!(sidebar_min_width(false), 806);
         assert_eq!(sidebar_min_width(true), 375);
+    }
+
+    #[test]
+    fn monitor_layout_id_is_independent_of_enumeration_order() {
+        let left = monitor(-1920, 1920);
+        let center = monitor(0, 1920);
+        let right = monitor(1920, 2560);
+
+        assert_eq!(
+            monitor_layout_id(&[left.clone(), center.clone(), right.clone()]),
+            monitor_layout_id(&[right, left, center])
+        );
+    }
+
+    #[test]
+    fn two_and_three_monitor_layouts_have_different_ids() {
+        let first = monitor(0, 1920);
+        let second = monitor(1920, 1920);
+        let third = monitor(-1920, 1920);
+
+        assert_ne!(
+            monitor_layout_id(&[first.clone(), second.clone()]),
+            monitor_layout_id(&[first, second, third])
+        );
+    }
+
+    #[test]
+    fn profiles_keep_separate_positions_for_each_monitor_layout() {
+        let first = WindowPlacement {
+            x: 120,
+            y: 80,
+            ..WindowPlacement::default()
+        };
+        let second = WindowPlacement {
+            x: 2240,
+            y: 160,
+            ..WindowPlacement::default()
+        };
+        let updated_first = WindowPlacement {
+            x: 360,
+            y: 240,
+            ..WindowPlacement::default()
+        };
+
+        let state = upsert_window_profile(WindowStateFile::default(), "three-monitors", &first);
+        let state = upsert_window_profile(state, "two-monitors", &second);
+        let state = upsert_window_profile(state, "three-monitors", &updated_first);
+
+        assert_eq!(state.profiles.len(), 2);
+        assert_eq!(state.profiles[0].layout_id, "two-monitors");
+        assert_eq!(state.profiles[0].placement, second);
+        assert_eq!(state.profiles[1].layout_id, "three-monitors");
+        assert_eq!(state.profiles[1].placement, updated_first);
+    }
+
+    #[test]
+    fn profile_history_is_bounded() {
+        let mut state = WindowStateFile::default();
+        for index in 0..(MAX_WINDOW_PROFILES + 2) {
+            state = upsert_window_profile(
+                state,
+                &format!("layout-{index}"),
+                &WindowPlacement::default(),
+            );
+        }
+
+        assert_eq!(state.profiles.len(), MAX_WINDOW_PROFILES);
+        assert_eq!(state.profiles[0].layout_id, "layout-2");
+    }
+
+    #[test]
+    fn partially_visible_window_is_clamped_inside_work_area() {
+        let placement = WindowPlacement {
+            x: -100,
+            y: -40,
+            width: 960,
+            height: 620,
+            maximized: false,
+        };
+
+        let fitted = fit_window_placement(&[monitor(0, 1920)], &placement, 806)
+            .expect("partially visible window should be recoverable");
+
+        assert_eq!(fitted.x, 0);
+        assert_eq!(fitted.y, 0);
+        assert_eq!(fitted.width, 960);
+        assert_eq!(fitted.height, 620);
+    }
+
+    #[test]
+    fn completely_offscreen_window_is_rejected() {
+        let placement = WindowPlacement {
+            x: 5000,
+            y: 5000,
+            ..WindowPlacement::default()
+        };
+
+        assert!(fit_window_placement(&[monitor(0, 1920)], &placement, 806).is_none());
+    }
+
+    #[test]
+    fn legacy_window_state_is_readable_for_migration() {
+        let parsed: WindowStateOnDisk = serde_json::from_value(serde_json::json!({
+            "version": 1,
+            "x": 180,
+            "y": 90,
+            "width": 960,
+            "height": 620,
+            "maximized": false
+        }))
+        .expect("version 1 state should deserialize");
+
+        match parsed {
+            WindowStateOnDisk::Legacy(state) => {
+                assert_eq!(state.version, 1);
+                assert_eq!(state.x, 180);
+            }
+            WindowStateOnDisk::Current(_) => panic!("version 1 state must use legacy format"),
+        }
     }
 }
