@@ -262,6 +262,7 @@ export function copyEventContent(event: CalendarEvent): EventContent {
     endTime: event.endTime,
     location: event.location,
     notes: event.notes,
+    reminders: structuredClone(event.reminders),
     style: { ...event.style },
   };
 }

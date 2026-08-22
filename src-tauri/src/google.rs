@@ -20,9 +20,10 @@ use url::Url;
 use windows_sys::Win32::UI::{Shell::ShellExecuteW, WindowsAndMessaging::SW_SHOWNORMAL};
 
 use super::{
-    load_app_data_inner, portable_data_dir, write_json_with_backup, AppData, CalendarEvent,
-    DeletedCalendarEvent, EventOrigin, EventRecurrence, EventStyle, GoogleAccount, GoogleEventLink,
-    GoogleOAuthClient, RecurrenceEnd, RecurrenceException, SyncConflict, APP_DATA_LOCK,
+    default_true, load_app_data_inner, portable_data_dir, write_json_with_backup, AppData,
+    CalendarEvent, DeletedCalendarEvent, EventOrigin, EventRecurrence, EventReminders, EventStyle,
+    GoogleAccount, GoogleEventLink, GoogleOAuthClient, RecurrenceEnd, RecurrenceException,
+    SyncConflict, APP_DATA_LOCK,
 };
 
 const GOOGLE_AUTH_URL: &str = "https://accounts.google.com/o/oauth2/v2/auth";
@@ -120,12 +121,39 @@ struct GoogleApiEvent {
     end: GoogleEventDateTime,
     #[serde(default)]
     recurrence: Vec<String>,
+    #[serde(default)]
+    reminders: GoogleEventReminders,
     recurring_event_id: Option<String>,
     original_start_time: Option<GoogleEventDateTime>,
     #[serde(default)]
     updated: String,
     #[serde(default)]
     extended_properties: GoogleExtendedProperties,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GoogleEventReminderOverride {
+    method: String,
+    minutes: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GoogleEventReminders {
+    #[serde(default = "default_true")]
+    use_default: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    overrides: Vec<GoogleEventReminderOverride>,
+}
+
+impl Default for GoogleEventReminders {
+    fn default() -> Self {
+        Self {
+            use_default: true,
+            overrides: Vec::new(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -169,6 +197,7 @@ struct GoogleEventMutation {
     end: GoogleEventDateTimeMutation,
     #[serde(skip_serializing_if = "Option::is_none")]
     recurrence: Option<Vec<String>>,
+    reminders: GoogleEventReminders,
     extended_properties: ExtendedPropertiesMutation,
 }
 
@@ -598,7 +627,7 @@ fn mutation_from_event(
     };
     let mut private = std::collections::BTreeMap::new();
     private.insert("koyomadoId".into(), event.id.clone());
-    private.insert("koyomadoDataVersion".into(), "3".into());
+    private.insert("koyomadoDataVersion".into(), "5".into());
     Ok(GoogleEventMutation {
         summary: event.title.clone(),
         description: event.notes.clone(),
@@ -608,8 +637,71 @@ fn mutation_from_event(
         recurrence: include_recurrence
             .then(|| recurrence_lines(event))
             .transpose()?,
+        reminders: google_reminders_from_local(&event.reminders),
         extended_properties: ExtendedPropertiesMutation { private },
     })
+}
+
+fn google_reminders_from_local(reminders: &EventReminders) -> GoogleEventReminders {
+    if reminders.use_google_default {
+        return GoogleEventReminders::default();
+    }
+    let mut overrides = reminders
+        .popup_minutes
+        .iter()
+        .map(|minutes| GoogleEventReminderOverride {
+            method: "popup".into(),
+            minutes: *minutes,
+        })
+        .chain(
+            reminders
+                .email_minutes
+                .iter()
+                .map(|minutes| GoogleEventReminderOverride {
+                    method: "email".into(),
+                    minutes: *minutes,
+                }),
+        )
+        .collect::<Vec<_>>();
+    overrides.sort_by(|left, right| {
+        left.minutes
+            .cmp(&right.minutes)
+            .then_with(|| left.method.cmp(&right.method))
+    });
+    GoogleEventReminders {
+        use_default: false,
+        overrides,
+    }
+}
+
+fn local_reminders_from_google(reminders: &GoogleEventReminders) -> EventReminders {
+    let valid_overrides = reminders
+        .overrides
+        .iter()
+        .filter(|reminder| {
+            (reminder.method == "popup" || reminder.method == "email") && reminder.minutes <= 40_320
+        })
+        .take(5)
+        .collect::<Vec<_>>();
+    let mut popup_minutes = valid_overrides
+        .iter()
+        .filter(|reminder| reminder.method == "popup")
+        .map(|reminder| reminder.minutes)
+        .collect::<Vec<_>>();
+    let mut email_minutes = valid_overrides
+        .iter()
+        .filter(|reminder| reminder.method == "email")
+        .map(|reminder| reminder.minutes)
+        .collect::<Vec<_>>();
+    popup_minutes.sort_unstable();
+    popup_minutes.dedup();
+    email_minutes.sort_unstable();
+    email_minutes.dedup();
+    EventReminders {
+        use_google_default: reminders.use_default,
+        popup_minutes,
+        email_minutes,
+    }
 }
 
 fn stable_local_event_id(account_id: &str, event_id: &str) -> String {
@@ -632,6 +724,12 @@ fn remote_matches_local(remote: &GoogleApiEvent, local: &CalendarEvent) -> bool 
     } else {
         Some(local.end_date.clone())
     };
+    let mut remote_reminders = remote.reminders.clone();
+    remote_reminders.overrides.sort_by(|left, right| {
+        left.minutes
+            .cmp(&right.minutes)
+            .then_with(|| left.method.cmp(&right.method))
+    });
     date_from_google(&remote.start).as_deref() == Some(local.date.as_str())
         && date_from_google(&remote.end) == expected_end_date
         && all_day == local.all_day
@@ -640,6 +738,7 @@ fn remote_matches_local(remote: &GoogleApiEvent, local: &CalendarEvent) -> bool 
         && remote.summary == local.title
         && remote.description == local.notes
         && remote.location == local.location
+        && remote_reminders == google_reminders_from_local(&local.reminders)
 }
 
 fn google_link(
@@ -735,6 +834,7 @@ fn local_event_from_google(
         end_time,
         location: remote.location.clone(),
         notes: remote.description.clone(),
+        reminders: local_reminders_from_google(&remote.reminders),
         style: EventStyle {
             color: "#83a9c2".into(),
         },
@@ -1688,6 +1788,7 @@ mod tests {
             end_time: String::new(),
             location: String::new(),
             notes: String::new(),
+            reminders: EventReminders::default(),
             style: EventStyle {
                 color: "#78a88f".into(),
             },
@@ -1717,6 +1818,7 @@ mod tests {
                 ..Default::default()
             },
             recurrence: Vec::new(),
+            reminders: GoogleEventReminders::default(),
             recurring_event_id: None,
             original_start_time: None,
             updated: "2026-01-02T00:00:00Z".into(),
@@ -1771,6 +1873,38 @@ mod tests {
         let mutation = mutation_from_event(&event, true).unwrap();
         assert_eq!(mutation.start.date.as_deref(), Some("2026-07-22"));
         assert_eq!(mutation.end.date.as_deref(), Some("2026-07-25"));
+    }
+
+    #[test]
+    fn explicit_popup_and_email_reminders_round_trip_with_google() {
+        let mut event = local_event("reminders", "2026-07-22");
+        event.reminders = EventReminders {
+            use_google_default: false,
+            popup_minutes: vec![10, 60],
+            email_minutes: vec![1_440],
+        };
+        let mutation = mutation_from_event(&event, true).unwrap();
+        assert!(!mutation.reminders.use_default);
+        assert_eq!(mutation.reminders.overrides.len(), 3);
+        assert!(mutation
+            .reminders
+            .overrides
+            .iter()
+            .any(|reminder| reminder.method == "popup" && reminder.minutes == 10));
+
+        let mut remote = remote_event("remote-reminders", "2026-07-22");
+        remote.reminders = mutation.reminders;
+        let imported = local_event_from_google(&account(), &remote, None).unwrap();
+        assert_eq!(imported.reminders, event.reminders);
+    }
+
+    #[test]
+    fn local_popup_can_coexist_with_google_default_without_false_difference() {
+        let mut event = local_event("local-popup", "2026-07-22");
+        event.reminders.popup_minutes = vec![10];
+        let mut remote = remote_event("remote-popup", "2026-07-22");
+        remote.summary = event.title.clone();
+        assert!(remote_matches_local(&remote, &event));
     }
 
     #[test]

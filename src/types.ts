@@ -1,4 +1,4 @@
-export const DATA_VERSION = 3 as const;
+export const DATA_VERSION = 5 as const;
 
 export type ThemeId =
   | "morning-mist"
@@ -75,6 +75,35 @@ export interface SyncConflict {
   message: string;
 }
 
+export interface EventReminders {
+  useGoogleDefault: boolean;
+  popupMinutes: number[];
+  emailMinutes: number[];
+}
+
+export type NotificationSoundId =
+  | "gentle-chimes"
+  | "deep-drop"
+  | "small-bell"
+  | "gentle-piano"
+  | "quiet-kalimba"
+  | "custom"
+  | "silent";
+
+export interface CustomNotificationSound {
+  displayName: string;
+  storedFileName: string;
+  mimeType: string;
+  kind: "audio" | "midi";
+}
+
+export interface NotificationSettings {
+  soundId: NotificationSoundId;
+  volume: number;
+  soundDurationSeconds: number;
+  customSound: CustomNotificationSound | null;
+}
+
 export interface CalendarEvent {
   id: string;
   title: string;
@@ -89,6 +118,7 @@ export interface CalendarEvent {
   endTime: string;
   location: string;
   notes: string;
+  reminders: EventReminders;
   style: EventStyle;
   origin: EventOrigin;
   syncTargets: string[];
@@ -100,7 +130,7 @@ export interface CalendarEvent {
 
 export type EventContent = Pick<
   CalendarEvent,
-  "title" | "annual" | "recurrence" | "allDay" | "startTime" | "endTime" | "location" | "notes" | "style"
+  "title" | "annual" | "recurrence" | "allDay" | "startTime" | "endTime" | "location" | "notes" | "reminders" | "style"
 > & { durationDays: number };
 
 export interface DeletedCalendarEvent extends CalendarEvent {
@@ -110,7 +140,9 @@ export interface DeletedCalendarEvent extends CalendarEvent {
 export interface AppSettings {
   theme: ThemeId;
   sidebarCollapsed: boolean;
+  uiScalePercent: number;
   windowDisplayMode: WindowDisplayMode;
+  notifications: NotificationSettings;
   google: GoogleIntegrationSettings;
 }
 
@@ -145,6 +177,7 @@ export interface GoogleIntegrationSettings {
   enabled: boolean;
   client: GoogleOAuthClient | null;
   accounts: GoogleAccount[];
+  defaultSyncTargets: string[];
 }
 
 export interface AppData {
@@ -172,7 +205,7 @@ export const DEFAULT_EVENT_STYLE: EventStyle = {
   color: "#78a88f",
 };
 
-export function createEmptyEvent(id: string, date: string, timestamp: string): CalendarEvent {
+export function createEmptyEvent(id: string, date: string, timestamp: string, syncTargets: string[] = []): CalendarEvent {
   return {
     id,
     title: "",
@@ -186,9 +219,14 @@ export function createEmptyEvent(id: string, date: string, timestamp: string): C
     endTime: "10:00",
     location: "",
     notes: "",
+    reminders: {
+      useGoogleDefault: true,
+      popupMinutes: [],
+      emailMinutes: [],
+    },
     style: structuredClone(DEFAULT_EVENT_STYLE),
     origin: { kind: "local" },
-    syncTargets: [],
+    syncTargets: [...new Set(syncTargets)],
     googleLinks: [],
     syncConflict: null,
     createdAt: timestamp,
@@ -203,11 +241,19 @@ export const DEFAULT_DATA: AppData = {
   settings: {
     theme: "morning-mist",
     sidebarCollapsed: false,
+    uiScalePercent: 100,
     windowDisplayMode: "taskbar",
+    notifications: {
+      soundId: "gentle-chimes",
+      volume: 35,
+      soundDurationSeconds: 12,
+      customSound: null,
+    },
     google: {
       enabled: false,
       client: null,
       accounts: [],
+      defaultSyncTargets: [],
     },
   },
 };

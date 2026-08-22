@@ -3,10 +3,5 @@
   "identifier": "default",
   "description": "メイン画面に必要な最小権限",
   "windows": ["main"],
-  "permissions": [
-    "core:default",
-    "autostart:allow-enable",
-    "autostart:allow-disable",
-    "autostart:allow-is-enabled"
-  ]
+  "permissions": ["core:default"]
 }

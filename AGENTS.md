@@ -5,14 +5,17 @@
 - 保存形式を変更するときは `version`、旧版読込、移行、更新前バックアップを維持する。
 - 実データをテスト、スクリーンショット、Gitへ含めない。画面確認には合成予定だけを使う。
 - Googleカレンダー連携以外の外部API、認証、アクセス解析、クラウド同期、印刷、PDF機能は、明示依頼なしに追加しない。
-- Googleカレンダー連携は任意機能とし、OFFの間は外部通信しない。利用者自身のDesktop OAuthクライアントを読み込み、最大3アカウント、アカウントごとに1カレンダーを同期する。
+- Googleカレンダー連携は任意機能とし、OFFの間は外部通信しない。利用者自身のDesktop OAuthクライアントを読み込み、最大3アカウント、アカウントごとに1カレンダーを同期する。API利用と将来の課金リスクをY-TECへ集中させないため、Y-TEC共通OAuthクライアント方式は採用しない。
+- Google Auth Platformは、利用者自身のOAuthプロジェクトを個人利用として「In production」へ切り替える手順に一本化する。OAuth検証申請、公開ホームページ、プライバシーポリシー、承認済みドメインは通常手順へ含めず、Y-TECのURLやドメインも入力させない。Testingは一時確認用に限り、原則7日で認証が切れること、In productionでも未確認アプリの初回警告と未検証プロジェクトの100新規ユーザー上限があり得ることを案内する。
 - Googleの更新トークンは `calendar-data.json` へ保存せず、アカウントID単位でWindows資格情報マネージャーへ保存する。OAuthクライアントJSON、更新トークン、実予定をテスト、ログ、Git、Issueへ含めない。
 - UI書体は同梱したLINE Seed JPへ統一し、予定ごとのフォント装飾機能は追加しない。
+- 表示倍率は80～130%の5%刻み、初期値100%とし、文字と操作部品を中心に調整して月カレンダーの情報量を保つ。
 - 配布はインストーラーではなくポータブルZIPを正本とする。アップデート時は利用者の `data` フォルダーを上書きしない。
 - GitHub Releaseへ添付する単体ファイル名はASCIIで固定する。操作説明書はRelease上では `Koyomado.pdf` とし、`SHA256SUMS.txt` の名前も実際のRelease asset名と一致させる（ZIP内の日本語名は維持してよい）。
 - `scripts/package-portable.ps1` はWindows PowerShell 5.1から実行するため、日本語を含む同ファイルのUTF-8 BOMを保持し、配布前に5.1で構文確認する。
 - 完了前に `npm run lint`、`npm test`、`npm run build`、`cargo test --locked`、`cargo clippy --locked --all-targets -- -D warnings`、`npm run tauri:build`、可能ならWindows実機操作を確認する。
-- 保存形式version 3では開始日・終了日、繰り返し条件、例外予定、Google同期リンク、競合情報、表示方法を保持する。終了日がない既存予定は開始日と同じ日へ補完し、version 1 / 2から移行するときは `calendar-data.v1.backup.json` / `calendar-data.v2.backup.json` を残す。
+- 保存形式version 5では開始日・終了日、繰り返し条件、例外予定、Google同期リンク、競合情報、表示方法、新規予定のGoogle既定保存先、予定ごとのリマインダー、通知音設定を保持する。終了日がない既存予定は開始日と同じ日へ補完し、version 1 / 2 / 3 / 4から移行するときは `calendar-data.v1.backup.json` / `calendar-data.v2.backup.json` / `calendar-data.v3.backup.json` / `calendar-data.v4.backup.json` を残す。
+- 通知はKoyomadoが起動している間だけ動作する。通知音の自動停止は初期値12秒、設定範囲3～60秒とする。標準音5種とユーザー音源をサポートし、ユーザー音源は実行ファイル横の `data/notification-sounds` に保存する。通知音素材を追加・差し替える場合は配布可能なライセンスと出典・編集履歴を第三者表記へ残す。
 - 複数日予定は期間中の各日に表示し、コピー・貼り付け、ドラッグ移動、繰り返し展開、Google同期でも日数を維持する。「これから7日間」では同じ期間予定を重複表示しない。
 - 実Google APIの結合確認は、利用者のテスト用OAuthクライアントと合成予定だけで行う。認証情報がない状態でライブ同期を確認済みと報告しない。
 - Dependabot等が `Cargo.lock` の脆弱性を検出した場合は、Windows実行時の依存経路を `cargo tree` で確認する。通信経路の警告は修正版へ更新して新しい配布版を作り、Linux専用の `glib` 等はWindows非該当の根拠を確認してから記録・判断する。

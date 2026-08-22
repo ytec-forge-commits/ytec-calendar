@@ -1,4 +1,4 @@
-import { useEffect, useState, type ChangeEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import {
   connectGoogleAccount,
   disconnectGoogleAccount,
@@ -21,9 +21,13 @@ interface GoogleSettingsProps {
 
 export function GoogleSettings({ google, onChange, onSync, syncBusy }: GoogleSettingsProps) {
   const [busy, setBusy] = useState("");
+  const [defaultTargetsBusy, setDefaultTargetsBusy] = useState(false);
+  const defaultTargetsSaving = useRef(false);
   const [status, setStatus] = useState("");
   const [credentialAvailability, setCredentialAvailability] = useState<Record<string, boolean>>({});
   const [calendarOptions, setCalendarOptions] = useState<Record<string, GoogleCalendarOption[]>>({});
+  const activeAccounts = google.accounts.filter((account) => account.syncEnabled);
+  const selectedDefaultCount = activeAccounts.filter((account) => google.defaultSyncTargets.includes(account.id)).length;
 
   useEffect(() => {
     if (google.accounts.length === 0) return;
@@ -104,10 +108,34 @@ export function GoogleSettings({ google, onChange, onSync, syncBusy }: GoogleSet
   };
 
   const patchAccount = async (accountId: string, patch: Partial<GoogleAccount>) => {
+    const defaultSyncTargets = patch.syncEnabled === false
+      ? google.defaultSyncTargets.filter((target) => target !== accountId)
+      : google.defaultSyncTargets;
     await onChange({
       ...google,
       accounts: google.accounts.map((account) => account.id === accountId ? { ...account, ...patch } : account),
+      defaultSyncTargets,
     });
+  };
+
+  const saveDefaultSyncTargets = async (defaultSyncTargets: string[]) => {
+    if (defaultTargetsSaving.current) return;
+    defaultTargetsSaving.current = true;
+    setDefaultTargetsBusy(true);
+    try {
+      await onChange({ ...google, defaultSyncTargets });
+    } catch (error) {
+      setStatus(`既定の保存先を変更できませんでした: ${String(error)}`);
+    } finally {
+      defaultTargetsSaving.current = false;
+      setDefaultTargetsBusy(false);
+    }
+  };
+
+  const toggleDefaultSyncTarget = async (accountId: string, enabled: boolean) => {
+    await saveDefaultSyncTargets(enabled
+      ? [...new Set([...google.defaultSyncTargets, accountId])]
+      : google.defaultSyncTargets.filter((target) => target !== accountId));
   };
 
   const disconnect = async (account: GoogleAccount) => {
@@ -115,7 +143,11 @@ export function GoogleSettings({ google, onChange, onSync, syncBusy }: GoogleSet
     setBusy(`disconnect-${account.id}`);
     try {
       const result = await disconnectGoogleAccount(account.id);
-      await onChange({ ...google, accounts: google.accounts.filter((item) => item.id !== account.id) });
+      await onChange({
+        ...google,
+        accounts: google.accounts.filter((item) => item.id !== account.id),
+        defaultSyncTargets: google.defaultSyncTargets.filter((target) => target !== account.id),
+      });
       setStatus(result.message);
     } catch (error) {
       setStatus(`接続を解除できませんでした: ${String(error)}`);
@@ -146,6 +178,7 @@ export function GoogleSettings({ google, onChange, onSync, syncBusy }: GoogleSet
               <input type="file" accept="application/json,.json" onChange={(event) => void importClient(event)} disabled={Boolean(busy)} />
             </label>
           </div>
+          <p className="native-note oauth-publishing-note">常用する場合は、利用者自身のGoogle Auth Platformで公開ステータスを「In production」にしてください。個人利用ではOAuth審査やWebサイト登録は不要です。Testingのままでは認証が原則7日で切れます。</p>
 
           <div className="google-account-heading">
             <span><strong>接続アカウント</strong><small>{google.accounts.length}/3件</small></span>
@@ -189,6 +222,49 @@ export function GoogleSettings({ google, onChange, onSync, syncBusy }: GoogleSet
                   </article>
                 );
               })}
+            </div>
+          )}
+          {google.accounts.length > 0 && (
+            <div className="default-sync-targets">
+              <div className="default-sync-heading">
+                <span>
+                  <strong>新しい予定の既定の保存先</strong>
+                  <small>新規予定で自動選択します。予定ごとに解除・変更できます。</small>
+                </span>
+                {activeAccounts.length > 0 && (
+                  <button
+                    type="button"
+                    className="text-button"
+                    disabled={defaultTargetsBusy || Boolean(busy) || syncBusy}
+                    onClick={() => void saveDefaultSyncTargets(
+                      selectedDefaultCount === activeAccounts.length ? [] : activeAccounts.map((account) => account.id),
+                    )}
+                  >
+                    {selectedDefaultCount === activeAccounts.length ? "すべて解除" : "すべて選択"}
+                  </button>
+                )}
+              </div>
+              {activeAccounts.length === 0 ? (
+                <p className="google-empty">「このアカウントと同期」をONにすると既定の保存先へ選べます。</p>
+              ) : (
+                <div className="sync-target-list default-sync-list">
+                  {activeAccounts.map((account) => (
+                    <label key={account.id}>
+                      <input
+                        type="checkbox"
+                        checked={google.defaultSyncTargets.includes(account.id)}
+                        disabled={defaultTargetsBusy || Boolean(busy) || syncBusy}
+                        onChange={(event) => void toggleDefaultSyncTarget(account.id, event.target.checked)}
+                      />
+                      <span>
+                        <strong>{account.displayName || account.email}</strong>
+                        <small>{account.calendarName || account.email}</small>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
+              <p className="default-sync-note">何も選ばない場合、新しい予定は従来どおりローカルだけへ保存します。</p>
             </div>
           )}
           <p className="native-note">認証用の更新トークンはWindows資格情報マネージャーへ保存されます。別のPCでは同じアカウントを再認証してください。</p>

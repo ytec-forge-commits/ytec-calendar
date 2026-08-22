@@ -23,6 +23,22 @@ import {
   upcomingEvents,
 } from "./lib/calendar";
 import { getAutoStartState, getDataDirectory, loadAppData, saveAppData, setAutoStartState, setSidebarWindowMode, setWindowDisplayMode, syncGoogleCalendars } from "./lib/store";
+import { saveCustomNotificationSound, showMainWindowForNotification } from "./lib/store";
+import {
+  BUILT_IN_NOTIFICATION_SOUNDS,
+  collectDueNotifications,
+  MAX_REMINDER_MINUTES,
+  MAX_REMINDERS,
+  maxReminderInputAmount,
+  playNotificationSound,
+  reminderInputParts,
+  reminderLabel,
+  reminderMinutesFromInput,
+  scheduleNotificationPlaybackStop,
+  type DueNotification,
+  type NotificationPlayback,
+  type ReminderUnit,
+} from "./lib/notifications";
 import {
   createEmptyEvent,
   DEFAULT_SIMPLE_RECURRENCE,
@@ -40,6 +56,7 @@ import { GoogleSettings } from "./GoogleSettings";
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 const EVENT_COLORS = ["#78a88f", "#83a9c2", "#b49ac7", "#d2a36f", "#d7867f", "#92a86c"];
 const CALENDAR_EVENT_DRAG_TYPE = "application/x-koyomado-event";
+const FIRED_NOTIFICATIONS_KEY = "koyomado-fired-notifications-v1";
 
 type CalendarContextMenu =
   | { kind: "event"; event: CalendarEvent; x: number; y: number }
@@ -61,10 +78,10 @@ function styleForEvent(style: EventStyle): CSSProperties {
   } as CSSProperties;
 }
 
-function createDraft(date: string, event?: CalendarEvent): CalendarEvent {
+function createDraft(date: string, event?: CalendarEvent, defaultSyncTargets: string[] = []): CalendarEvent {
   if (event) return structuredClone(event);
   const now = new Date().toISOString();
-  return createEmptyEvent(crypto.randomUUID(), date, now);
+  return createEmptyEvent(crypto.randomUUID(), date, now, defaultSyncTargets);
 }
 
 function App() {
@@ -82,9 +99,12 @@ function App() {
   const [toast, setToast] = useState("");
   const [loadError, setLoadError] = useState("");
   const [syncBusy, setSyncBusy] = useState(false);
+  const [notificationQueue, setNotificationQueue] = useState<DueNotification[]>([]);
+  const [uiScalePreview, setUiScalePreview] = useState<number | null>(null);
   const dataRef = useRef<AppData | null>(null);
   const interactionActiveRef = useRef(false);
   const syncBusyRef = useRef(false);
+  const notificationPlaybackRef = useRef<NotificationPlayback | null>(null);
 
   useEffect(() => {
     loadAppData().then(setData).catch((error: unknown) => setLoadError(String(error)));
@@ -170,6 +190,11 @@ function App() {
     document.documentElement.dataset.theme = data.settings.theme;
   }, [data]);
 
+  const uiScalePercent = uiScalePreview ?? data?.settings.uiScalePercent ?? 100;
+  useEffect(() => {
+    document.documentElement.style.setProperty("--ui-scale", String(uiScalePercent / 100));
+  }, [uiScalePercent]);
+
   const sidebarCollapsed = data?.settings.sidebarCollapsed;
   useEffect(() => {
     if (sidebarCollapsed === undefined) return;
@@ -211,6 +236,76 @@ function App() {
     const timer = window.setTimeout(() => setToast(""), 2600);
     return () => window.clearTimeout(timer);
   }, [toast]);
+
+  useEffect(() => {
+    if (!data) return;
+    const checkNotifications = () => {
+      const now = new Date();
+      let fired: Record<string, number> = {};
+      try {
+        fired = JSON.parse(localStorage.getItem(FIRED_NOTIFICATIONS_KEY) ?? "{}") as Record<string, number>;
+      } catch {
+        fired = {};
+      }
+      const keepAfter = now.getTime() - 35 * 24 * 60 * 60_000;
+      fired = Object.fromEntries(Object.entries(fired).filter(([, timestamp]) => Number(timestamp) >= keepAfter));
+      const due = collectDueNotifications(dataRef.current?.events ?? [], now).filter((notification) => !fired[notification.key]);
+      if (!due.length) {
+        localStorage.setItem(FIRED_NOTIFICATIONS_KEY, JSON.stringify(fired));
+        return;
+      }
+      due.forEach((notification) => { fired[notification.key] = now.getTime(); });
+      localStorage.setItem(FIRED_NOTIFICATIONS_KEY, JSON.stringify(fired));
+      setNotificationQueue((current) => {
+        const existing = new Set(current.map((notification) => notification.key));
+        return [...current, ...due.filter((notification) => !existing.has(notification.key))];
+      });
+      void showMainWindowForNotification().catch((error: unknown) => {
+        setToast(`通知画面を表示できませんでした: ${String(error)}`);
+      });
+    };
+    checkNotifications();
+    const timer = window.setInterval(checkNotifications, 15_000);
+    window.addEventListener("focus", checkNotifications);
+    document.addEventListener("visibilitychange", checkNotifications);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", checkNotifications);
+      document.removeEventListener("visibilitychange", checkNotifications);
+    };
+  }, [data]);
+
+  const currentNotification = notificationQueue[0] ?? null;
+  useEffect(() => {
+    notificationPlaybackRef.current?.stop();
+    notificationPlaybackRef.current = null;
+    if (!currentNotification || !data) return;
+    let disposed = false;
+    let cancelAutoStop: (() => void) | null = null;
+    void playNotificationSound(data.settings.notifications).then((playback) => {
+      if (disposed) playback.stop();
+      else {
+        notificationPlaybackRef.current = playback;
+        cancelAutoStop = scheduleNotificationPlaybackStop(playback, () => {
+          if (notificationPlaybackRef.current === playback) {
+            notificationPlaybackRef.current = null;
+          }
+        }, data.settings.notifications.soundDurationSeconds * 1_000);
+      }
+    }).catch((error: unknown) => setToast(`通知音を再生できませんでした: ${String(error)}`));
+    return () => {
+      disposed = true;
+      cancelAutoStop?.();
+      notificationPlaybackRef.current?.stop();
+      notificationPlaybackRef.current = null;
+    };
+  }, [currentNotification, data]);
+
+  const acknowledgeNotification = () => {
+    notificationPlaybackRef.current?.stop();
+    notificationPlaybackRef.current = null;
+    setNotificationQueue((current) => current.slice(1));
+  };
 
   useEffect(() => {
     if (!contextMenu) return;
@@ -412,9 +507,15 @@ function App() {
   };
 
   const pasteCopiedEvent = async (date: string) => {
-    if (!copiedContent) return;
+    if (!copiedContent || !data) return;
     setContextMenu(null);
-    await saveEvent(pasteEventContent(createDraft(date), copiedContent));
+    const activeAccountIds = new Set(
+      data.settings.google.enabled
+        ? data.settings.google.accounts.filter((account) => account.syncEnabled).map((account) => account.id)
+        : [],
+    );
+    const defaultSyncTargets = data.settings.google.defaultSyncTargets.filter((accountId) => activeAccountIds.has(accountId));
+    await saveEvent(pasteEventContent(createDraft(date, undefined, defaultSyncTargets), copiedContent));
   };
 
   const goToToday = () => {
@@ -574,6 +675,14 @@ function App() {
   const updateSettings = async (settings: AppData["settings"]) => {
     if (!data) return;
     const connectedAccountIds = new Set(settings.google.accounts.map((account) => account.id));
+    const activeAccountIds = new Set(settings.google.accounts.filter((account) => account.syncEnabled).map((account) => account.id));
+    const normalizedSettings = {
+      ...settings,
+      google: {
+        ...settings.google,
+        defaultSyncTargets: [...new Set(settings.google.defaultSyncTargets.filter((accountId) => activeAccountIds.has(accountId)))],
+      },
+    };
     const removeDisconnectedLinks = (event: CalendarEvent): CalendarEvent => {
       const origin = event.origin.kind === "google" && !connectedAccountIds.has(event.origin.accountId)
         ? { kind: "local" as const }
@@ -590,7 +699,7 @@ function App() {
       ...data,
       events: data.events.map(removeDisconnectedLinks),
       deletedEvents: data.deletedEvents.map((event) => ({ ...removeDisconnectedLinks(event), deletedAt: event.deletedAt })),
-      settings,
+      settings: normalizedSettings,
     }, "設定を保存しました");
   };
 
@@ -783,6 +892,7 @@ function App() {
           event={editing === "new" ? undefined : editing}
           copiedContent={copiedContent}
           googleAccounts={data.settings.google.enabled ? data.settings.google.accounts.filter((account) => account.syncEnabled) : []}
+          defaultSyncTargets={data.settings.google.enabled ? data.settings.google.defaultSyncTargets : []}
           onClose={() => setEditing(null)}
           onSave={saveEvent}
           onDelete={deleteEvent}
@@ -793,9 +903,10 @@ function App() {
         <SettingsDialog
           settings={data.settings}
           onChange={updateSettings}
+          onPreviewUiScale={setUiScalePreview}
           onSync={() => runGoogleSync(true, true)}
           syncBusy={syncBusy}
-          onClose={() => setSettingsOpen(false)}
+          onClose={() => { setUiScalePreview(null); setSettingsOpen(false); }}
         />
       )}
       {agendaDate && (
@@ -844,7 +955,43 @@ function App() {
           {dragState.copy ? "コピー先の日付へドロップ（Ctrlを離すと移動）" : "移動先の日付へドロップ（Ctrlを押すとコピー）"}
         </div>
       )}
+      {currentNotification && (
+        <NotificationPopup
+          notification={currentNotification}
+          remaining={notificationQueue.length}
+          onAcknowledge={acknowledgeNotification}
+          onOpen={() => {
+            const event = currentNotification.event;
+            acknowledgeNotification();
+            setDisplayMonth(new Date(Number(event.date.slice(0, 4)), Number(event.date.slice(5, 7)) - 1, 1));
+            setSelectedDate(event.date);
+            openEventEditor(event);
+          }}
+        />
+      )}
       {toast && <div className="toast" role="status">{toast}</div>}
+    </div>
+  );
+}
+
+function NotificationPopup({ notification, remaining, onAcknowledge, onOpen }: { notification: DueNotification; remaining: number; onAcknowledge: () => void; onOpen: () => void }) {
+  const event = notification.event;
+  return (
+    <div className="notification-backdrop" role="presentation">
+      <section className="notification-popup" role="alertdialog" aria-modal="true" aria-labelledby="notification-title">
+        <div className="notification-icon" aria-hidden="true">♬</div>
+        <div className="notification-copy">
+          <p className="section-kicker">REMINDER{remaining > 1 ? ` ・ あと${remaining - 1}件` : ""}</p>
+          <h2 id="notification-title">{event.title}</h2>
+          <p>{formatDayMenuDate(event.date)}・{formatEventPeriod(event)}</p>
+          {event.location && <p className="notification-location">場所：{event.location}</p>}
+          <small>{reminderLabel(notification.reminderMinutes)}の通知です</small>
+        </div>
+        <div className="notification-actions">
+          <button type="button" className="secondary-button" onClick={onOpen}>予定を開く</button>
+          <button type="button" className="primary-button" autoFocus onClick={onAcknowledge}>OK（音を止める）</button>
+        </div>
+      </section>
     </div>
   );
 }
@@ -905,14 +1052,19 @@ interface EventEditorProps {
   event?: CalendarEvent;
   copiedContent: EventContent | null;
   googleAccounts: GoogleAccount[];
+  defaultSyncTargets: string[];
   onClose: () => void;
   onSave: (event: CalendarEvent, scope?: RecurrenceEditScope) => Promise<void>;
   onDelete: (event: CalendarEvent, scope?: RecurrenceEditScope) => Promise<void>;
   onCopy: (event: CalendarEvent) => void;
 }
 
-function EventEditor({ date, event, copiedContent, googleAccounts, onClose, onSave, onDelete, onCopy }: EventEditorProps) {
-  const [draft, setDraft] = useState(() => createDraft(date, event));
+function EventEditor({ date, event, copiedContent, googleAccounts, defaultSyncTargets, onClose, onSave, onDelete, onCopy }: EventEditorProps) {
+  const [draft, setDraft] = useState(() => createDraft(
+    date,
+    event,
+    defaultSyncTargets.filter((accountId) => googleAccounts.some((account) => account.id === accountId)),
+  ));
   const [error, setError] = useState("");
   const isOccurrence = Boolean(event?.occurrence || event?.recurrenceException);
   const [recurrenceScope, setRecurrenceScope] = useState<RecurrenceEditScope>(isOccurrence ? "occurrence" : "series");
@@ -963,6 +1115,41 @@ function EventEditor({ date, event, copiedContent, googleAccounts, onClose, onSa
       : current);
   };
 
+  const setReminderMinutes = (index: number, minutes: number) => {
+    const value = Math.max(0, Math.min(MAX_REMINDER_MINUTES, Math.round(minutes) || 0));
+    setDraft((current) => ({
+      ...current,
+      reminders: {
+        ...current.reminders,
+        popupMinutes: current.reminders.popupMinutes.map((currentMinutes, currentIndex) => currentIndex === index ? value : currentMinutes),
+      },
+    }));
+  };
+
+  const setReminderAmount = (index: number, amount: number, unit: ReminderUnit) => {
+    setReminderMinutes(index, reminderMinutesFromInput(amount, unit));
+  };
+
+  const setReminderUnit = (index: number, unit: ReminderUnit) => {
+    const currentMinutes = draft.reminders.popupMinutes[index] ?? 0;
+    const currentAmount = reminderInputParts(currentMinutes).amount;
+    setReminderMinutes(index, reminderMinutesFromInput(currentAmount, unit));
+  };
+
+  const addReminder = () => {
+    setDraft((current) => current.reminders.popupMinutes.length + current.reminders.emailMinutes.length >= MAX_REMINDERS ? current : ({
+      ...current,
+      reminders: { ...current.reminders, popupMinutes: [...current.reminders.popupMinutes, 10] },
+    }));
+  };
+
+  const removeReminder = (index: number) => {
+    setDraft((current) => ({
+      ...current,
+      reminders: { ...current.reminders, popupMinutes: current.reminders.popupMinutes.filter((_, currentIndex) => currentIndex !== index) },
+    }));
+  };
+
   const submit = (submitEvent: FormEvent) => {
     submitEvent.preventDefault();
     const title = draft.title.trim();
@@ -971,7 +1158,8 @@ function EventEditor({ date, event, copiedContent, googleAccounts, onClose, onSa
     if (draft.endDate < draft.date) return setError("終了日は開始日以降にしてください。");
     if (!isValidEventRange(draft)) return setError("同じ日の予定は、終了時刻を開始時刻より後にしてください。");
     setError("");
-    void onSave({ ...draft, title, location: draft.location.trim(), notes: draft.notes.trim() }, recurrenceScope);
+    const popupMinutes = [...new Set(draft.reminders.popupMinutes)].sort((left, right) => left - right).slice(0, Math.max(0, MAX_REMINDERS - draft.reminders.emailMinutes.length));
+    void onSave({ ...draft, title, location: draft.location.trim(), notes: draft.notes.trim(), reminders: { ...draft.reminders, popupMinutes } }, recurrenceScope);
   };
 
   const copyCurrentContent = () => {
@@ -1140,6 +1328,44 @@ function EventEditor({ date, event, copiedContent, googleAccounts, onClose, onSa
           <label className="field"><span>場所 <small>任意</small></span><input value={draft.location} onChange={(changeEvent) => patchDraft("location", changeEvent.target.value)} placeholder="会議室、訪問先など" maxLength={100} /></label>
           <label className="field"><span>メモ <small>任意</small></span><textarea value={draft.notes} onChange={(changeEvent) => patchDraft("notes", changeEvent.target.value)} placeholder="補足や持ち物など" rows={3} maxLength={1000} /></label>
 
+          <fieldset className="reminder-panel">
+            <legend>通知</legend>
+            <div className="reminder-heading">
+              <div><strong>Koyomadoのポップアップ通知</strong><small>アプリが起動している間、設定時刻に予定を表示し、通知音は設定した秒数だけ鳴ります。</small></div>
+              <button type="button" className="secondary-button" onClick={addReminder} disabled={draft.reminders.popupMinutes.length + draft.reminders.emailMinutes.length >= MAX_REMINDERS}>＋ 通知を追加</button>
+            </div>
+            {draft.reminders.popupMinutes.length === 0 ? (
+              <p className="reminder-empty">この予定の通知はありません。</p>
+            ) : (
+              <div className="reminder-list">
+                {draft.reminders.popupMinutes.map((minutes, index) => {
+                  const input = reminderInputParts(minutes);
+                  return (
+                    <div className="reminder-row" key={index}>
+                      <input type="number" min="0" max={maxReminderInputAmount(input.unit)} step="1" value={input.amount} onChange={(changeEvent) => setReminderAmount(index, Number(changeEvent.target.value), input.unit)} aria-label={`通知${index + 1}の数値`} />
+                      <select value={input.unit} onChange={(changeEvent) => setReminderUnit(index, changeEvent.target.value as ReminderUnit)} aria-label={`通知${index + 1}の単位`}>
+                        <option value="minutes">分前</option>
+                        <option value="hours">時間前</option>
+                        <option value="days">日前</option>
+                      </select>
+                      <small>{reminderLabel(minutes)}</small>
+                      <button type="button" className="text-button danger-text" onClick={() => removeReminder(index)}>削除</button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            {draft.allDay && draft.reminders.popupMinutes.length > 0 && <p className="native-note">終日予定は開始日の0:00を基準に通知します。</p>}
+            {(googleAccounts.length > 0 || sourceGoogleAccountId) && (
+              <div className="google-reminder-mode">
+                <strong>Googleカレンダー側の通知</strong>
+                <label><input type="radio" name="google-reminder-mode" checked={draft.reminders.useGoogleDefault} onChange={() => setDraft((current) => ({ ...current, reminders: { ...current.reminders, useGoogleDefault: true } }))} />Googleカレンダーの既定設定を使う</label>
+                <label><input type="radio" name="google-reminder-mode" checked={!draft.reminders.useGoogleDefault} onChange={() => setDraft((current) => ({ ...current, reminders: { ...current.reminders, useGoogleDefault: false } }))} />上の通知時刻をGoogleにも保存する</label>
+                {draft.reminders.emailMinutes.length > 0 && <small>Googleから取得したメール通知（{draft.reminders.emailMinutes.map(reminderLabel).join("、")}）も維持します。</small>}
+              </div>
+            )}
+          </fieldset>
+
           {googleAccounts.length > 0 && (
             <fieldset className="sync-target-panel">
               <legend>Googleカレンダーへの保存先</legend>
@@ -1191,16 +1417,25 @@ function EventEditor({ date, event, copiedContent, googleAccounts, onClose, onSa
 interface SettingsDialogProps {
   settings: AppData["settings"];
   onChange: (settings: AppData["settings"]) => Promise<void>;
+  onPreviewUiScale: (percent: number | null) => void;
   onSync: () => Promise<boolean>;
   syncBusy: boolean;
   onClose: () => void;
 }
 
-function SettingsDialog({ settings, onChange, onSync, syncBusy, onClose }: SettingsDialogProps) {
+function SettingsDialog({ settings, onChange, onPreviewUiScale, onSync, syncBusy, onClose }: SettingsDialogProps) {
   const [autoStart, setAutoStart] = useState<boolean | null>(null);
   const [autoStartBusy, setAutoStartBusy] = useState(true);
   const [dataDirectory, setDataDirectory] = useState("確認中…");
   const [status, setStatus] = useState("");
+  const [soundBusy, setSoundBusy] = useState(false);
+  const [soundPreviewing, setSoundPreviewing] = useState(false);
+  const [volumeDraft, setVolumeDraft] = useState(settings.notifications.volume);
+  const [durationDraft, setDurationDraft] = useState(settings.notifications.soundDurationSeconds);
+  const [uiScaleDraft, setUiScaleDraft] = useState(settings.uiScalePercent);
+  const uiScaleDraftRef = useRef(settings.uiScalePercent);
+  const soundPlaybackRef = useRef<NotificationPlayback | null>(null);
+  const soundFileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     Promise.all([getAutoStartState(), getDataDirectory()]).then(([enabled, directory]) => {
@@ -1212,6 +1447,78 @@ function SettingsDialog({ settings, onChange, onSync, syncBusy, onClose }: Setti
       setStatus(`設定の確認に失敗しました: ${String(error)}`);
     });
   }, []);
+
+  useEffect(() => () => soundPlaybackRef.current?.stop(), []);
+
+  const stopSoundPreview = () => {
+    soundPlaybackRef.current?.stop();
+    soundPlaybackRef.current = null;
+    setSoundPreviewing(false);
+  };
+
+  const toggleSoundPreview = async () => {
+    if (soundPreviewing) return stopSoundPreview();
+    setSoundBusy(true);
+    try {
+      const playback = await playNotificationSound({ ...settings.notifications, volume: volumeDraft });
+      soundPlaybackRef.current = playback;
+      setSoundPreviewing(true);
+      setStatus("通知音を試聴しています。「試聴を停止」で止められます。");
+    } catch (error) {
+      setStatus(`通知音を再生できませんでした: ${String(error)}`);
+    } finally {
+      setSoundBusy(false);
+    }
+  };
+
+  const chooseCustomSound = async (file: File | undefined) => {
+    if (!file) return;
+    stopSoundPreview();
+    setSoundBusy(true);
+    try {
+      const customSound = await saveCustomNotificationSound(file);
+      if (!customSound) throw new Error("保存した通知音を確認できません");
+      await onChange({ ...settings, notifications: { ...settings.notifications, soundId: "custom", customSound } });
+      setStatus(`「${customSound.displayName}」をカスタム通知音に設定しました。`);
+    } catch (error) {
+      setStatus(`カスタム通知音を設定できませんでした: ${String(error)}`);
+    } finally {
+      setSoundBusy(false);
+      if (soundFileInputRef.current) soundFileInputRef.current.value = "";
+    }
+  };
+
+  const commitVolume = () => {
+    if (volumeDraft === settings.notifications.volume) return;
+    void onChange({ ...settings, notifications: { ...settings.notifications, volume: volumeDraft } });
+  };
+
+  const commitDuration = () => {
+    if (durationDraft === settings.notifications.soundDurationSeconds) return;
+    void onChange({ ...settings, notifications: { ...settings.notifications, soundDurationSeconds: durationDraft } });
+  };
+
+  const previewUiScale = (value: number) => {
+    uiScaleDraftRef.current = value;
+    setUiScaleDraft(value);
+    onPreviewUiScale(value);
+  };
+
+  const commitUiScale = async (value = uiScaleDraftRef.current) => {
+    if (value === settings.uiScalePercent) return;
+    await onChange({ ...settings, uiScalePercent: value });
+  };
+
+  const closeSettings = async () => {
+    await commitUiScale();
+    onPreviewUiScale(null);
+    onClose();
+  };
+
+  const resetUiScale = () => {
+    previewUiScale(100);
+    void onChange({ ...settings, uiScalePercent: 100 });
+  };
 
   const toggleAutoStart = async () => {
     if (autoStart === null) return;
@@ -1228,9 +1535,9 @@ function SettingsDialog({ settings, onChange, onSync, syncBusy, onClose }: Setti
   };
 
   return (
-    <div className="modal-backdrop" onMouseDown={(mouseEvent) => { if (mouseEvent.target === mouseEvent.currentTarget) onClose(); }}>
+    <div className="modal-backdrop" onMouseDown={(mouseEvent) => { if (mouseEvent.target === mouseEvent.currentTarget) void closeSettings(); }}>
       <section className="dialog settings-dialog" aria-modal="true" role="dialog" aria-labelledby="settings-dialog-title">
-        <header className="dialog-header"><div><p className="section-kicker">PREFERENCES</p><h2 id="settings-dialog-title">表示と起動の設定</h2></div><button className="close-button" onClick={onClose} aria-label="閉じる">×</button></header>
+        <header className="dialog-header"><div><p className="section-kicker">PREFERENCES</p><h2 id="settings-dialog-title">表示・通知・起動の設定</h2></div><button className="close-button" onClick={() => void closeSettings()} aria-label="閉じる">×</button></header>
         <div className="settings-body">
           <section className="settings-section">
             <div className="settings-heading"><div><h3>背景テーマ</h3><p>8つの落ち着いた配色から選べます。</p></div></div>
@@ -1242,6 +1549,16 @@ function SettingsDialog({ settings, onChange, onSync, syncBusy, onClose }: Setti
                   <b className="theme-check">✓</b>
                 </button>
               ))}
+            </div>
+          </section>
+
+          <section className="settings-section">
+            <div className="settings-heading"><div><h3>表示サイズ</h3><p>文字と操作部品を、PC環境に合わせて見やすく調整します。</p></div></div>
+            <div className="ui-scale-row">
+              <label htmlFor="ui-scale"><strong>表示倍率</strong><span>{uiScaleDraft}%</span></label>
+              <input id="ui-scale" type="range" min="80" max="130" step="5" value={uiScaleDraft} onChange={(changeEvent) => previewUiScale(Number(changeEvent.target.value))} onMouseUp={(mouseEvent) => void commitUiScale(Number(mouseEvent.currentTarget.value))} onTouchEnd={(touchEvent) => void commitUiScale(Number(touchEvent.currentTarget.value))} onKeyUp={(keyboardEvent) => void commitUiScale(Number(keyboardEvent.currentTarget.value))} onBlur={(focusEvent) => void commitUiScale(Number(focusEvent.currentTarget.value))} />
+              <button type="button" className="secondary-button" onClick={resetUiScale} disabled={uiScaleDraft === 100}>100%に戻す</button>
+              <small>80～130%・5%刻み。初期設定は100%です。</small>
             </div>
           </section>
 
@@ -1268,6 +1585,37 @@ function SettingsDialog({ settings, onChange, onSync, syncBusy, onClose }: Setti
             {autoStart === null && !autoStartBusy && <p className="native-note">Webプレビューでは変更できません。Windowsアプリ版で設定してください。</p>}
           </section>
 
+          <section className="settings-section notification-settings">
+            <div className="settings-heading"><div><h3>予定の通知音</h3><p>予定ごとの通知時刻に鳴らす音、音量、長さを設定します。</p></div></div>
+            <div className="sound-grid" role="radiogroup" aria-label="通知音を選択">
+              {BUILT_IN_NOTIFICATION_SOUNDS.map((sound) => (
+                <button key={sound.id} type="button" role="radio" aria-checked={settings.notifications.soundId === sound.id} className={settings.notifications.soundId === sound.id ? "sound-card active" : "sound-card"} onClick={() => { stopSoundPreview(); void onChange({ ...settings, notifications: { ...settings.notifications, soundId: sound.id } }); }}>
+                  <span aria-hidden="true">♪</span><span><strong>{sound.name}</strong><small>{sound.description}</small></span><b>✓</b>
+                </button>
+              ))}
+              <button type="button" role="radio" aria-checked={settings.notifications.soundId === "silent"} className={settings.notifications.soundId === "silent" ? "sound-card active" : "sound-card"} onClick={() => { stopSoundPreview(); void onChange({ ...settings, notifications: { ...settings.notifications, soundId: "silent" } }); }}>
+                <span aria-hidden="true">×</span><span><strong>音なし</strong><small>ポップアップだけ表示</small></span><b>✓</b>
+              </button>
+            </div>
+            <div className="custom-sound-row">
+              <div><strong>自分の音声ファイル</strong><small>{settings.notifications.customSound?.displayName ?? "MP3 / M4A / AAC / WAV / OGG / Opus / FLAC / MIDI、15 MBまで"}</small></div>
+              <input ref={soundFileInputRef} type="file" hidden accept=".mp3,.m4a,.mp4,.aac,.wav,.ogg,.oga,.opus,.flac,.mid,.midi,audio/*" onChange={(changeEvent) => void chooseCustomSound(changeEvent.target.files?.[0])} />
+              {settings.notifications.customSound && <button type="button" className={settings.notifications.soundId === "custom" ? "secondary-button active" : "secondary-button"} onClick={() => { stopSoundPreview(); void onChange({ ...settings, notifications: { ...settings.notifications, soundId: "custom" } }); }}>この音を選択</button>}
+              <button type="button" className="secondary-button" onClick={() => soundFileInputRef.current?.click()} disabled={soundBusy}>ファイルを選ぶ</button>
+            </div>
+            <div className="volume-row">
+              <label htmlFor="notification-volume"><strong>音量</strong><span>{volumeDraft}%</span></label>
+              <input id="notification-volume" type="range" min="0" max="100" step="1" value={volumeDraft} onChange={(changeEvent) => setVolumeDraft(Number(changeEvent.target.value))} onMouseUp={commitVolume} onTouchEnd={commitVolume} onKeyUp={commitVolume} onBlur={commitVolume} />
+              <button type="button" className="secondary-button sound-preview-button" onClick={() => void toggleSoundPreview()} disabled={soundBusy || settings.notifications.soundId === "silent"}>{soundPreviewing ? "試聴を停止" : "選択中の音を試聴"}</button>
+            </div>
+            <div className="duration-row">
+              <label htmlFor="notification-duration"><strong>音を鳴らす長さ</strong><span>{durationDraft}秒</span></label>
+              <input id="notification-duration" type="range" min="3" max="60" step="1" value={durationDraft} onChange={(changeEvent) => setDurationDraft(Number(changeEvent.target.value))} onMouseUp={commitDuration} onTouchEnd={commitDuration} onKeyUp={commitDuration} onBlur={commitDuration} />
+              <small>3～60秒。初期設定は12秒です。</small>
+            </div>
+            <p className="native-note">設定秒数で自動停止し、OKを押した場合はすぐ止まります。MIDIは内蔵の穏やかな音色で再生するため、元の楽器音とは異なる場合があります。通知はKoyomadoが起動している間だけ動作します。</p>
+          </section>
+
           <GoogleSettings
             google={settings.google}
             onChange={(google) => onChange({ ...settings, google })}
@@ -1282,7 +1630,7 @@ function SettingsDialog({ settings, onChange, onSync, syncBusy, onClose }: Setti
           </section>
           {status && <p className="settings-status" role="status">{status}</p>}
         </div>
-        <footer className="dialog-footer"><span /><button className="primary-button" onClick={onClose}>完了</button></footer>
+        <footer className="dialog-footer"><span /><button className="primary-button" onClick={() => void closeSettings()}>完了</button></footer>
       </section>
     </div>
   );

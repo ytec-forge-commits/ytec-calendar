@@ -1,5 +1,7 @@
+use auto_launch::AutoLaunch;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
+    collections::HashSet,
     fs::{self, File},
     io::Write,
     path::{Path, PathBuf},
@@ -15,15 +17,16 @@ use tauri::{
 mod credentials;
 mod google;
 
-const CALENDAR_DATA_VERSION: u32 = 3;
+const CALENDAR_DATA_VERSION: u32 = 5;
 const WINDOW_STATE_VERSION: u32 = 2;
 const MAX_WINDOW_PROFILES: usize = 12;
 const MIN_WINDOW_HEIGHT: u32 = 600;
 const EXPANDED_MIN_WINDOW_WIDTH: u32 = 806;
 const COLLAPSED_MIN_WINDOW_WIDTH: u32 = 375;
+const AUTOSTART_ENTRY_NAME: &str = "Koyomado";
 static APP_DATA_LOCK: Mutex<()> = Mutex::new(());
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct EventStyle {
     color: String,
@@ -127,6 +130,27 @@ struct SyncConflict {
     message: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct EventReminders {
+    #[serde(default = "default_true")]
+    use_google_default: bool,
+    #[serde(default)]
+    popup_minutes: Vec<u32>,
+    #[serde(default)]
+    email_minutes: Vec<u32>,
+}
+
+impl Default for EventReminders {
+    fn default() -> Self {
+        Self {
+            use_google_default: true,
+            popup_minutes: Vec::new(),
+            email_minutes: Vec::new(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct CalendarEvent {
@@ -146,6 +170,8 @@ struct CalendarEvent {
     end_time: String,
     location: String,
     notes: String,
+    #[serde(default)]
+    reminders: EventReminders,
     style: EventStyle,
     #[serde(default)]
     origin: EventOrigin,
@@ -167,6 +193,29 @@ fn normalize_event_range(event: &mut CalendarEvent) -> bool {
     false
 }
 
+fn normalize_reminder_minutes(minutes: &mut Vec<u32>) -> bool {
+    let previous = minutes.clone();
+    minutes.retain(|minutes| *minutes <= 40_320);
+    minutes.sort_unstable();
+    minutes.dedup();
+    minutes.truncate(5);
+    *minutes != previous
+}
+
+fn normalize_event_reminders(event: &mut CalendarEvent) -> bool {
+    let mut changed = normalize_reminder_minutes(&mut event.reminders.email_minutes);
+    changed |= normalize_reminder_minutes(&mut event.reminders.popup_minutes);
+    let available_popup_slots = 5usize.saturating_sub(event.reminders.email_minutes.len());
+    if event.reminders.popup_minutes.len() > available_popup_slots {
+        event
+            .reminders
+            .popup_minutes
+            .truncate(available_popup_slots);
+        changed = true;
+    }
+    changed
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct DeletedCalendarEvent {
@@ -181,8 +230,12 @@ struct AppSettings {
     theme: String,
     #[serde(default)]
     sidebar_collapsed: bool,
+    #[serde(default = "default_ui_scale_percent")]
+    ui_scale_percent: u8,
     #[serde(default)]
     window_display_mode: WindowDisplayMode,
+    #[serde(default)]
+    notifications: NotificationSettings,
     #[serde(default)]
     google: GoogleIntegrationSettings,
 }
@@ -235,6 +288,81 @@ fn default_true() -> bool {
     true
 }
 
+fn default_ui_scale_percent() -> u8 {
+    100
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CustomNotificationSound {
+    display_name: String,
+    stored_file_name: String,
+    mime_type: String,
+    kind: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct NotificationSettings {
+    sound_id: String,
+    volume: u8,
+    #[serde(default = "default_notification_sound_duration_seconds")]
+    sound_duration_seconds: u8,
+    #[serde(default)]
+    custom_sound: Option<CustomNotificationSound>,
+}
+
+fn default_notification_sound_duration_seconds() -> u8 {
+    12
+}
+
+impl Default for NotificationSettings {
+    fn default() -> Self {
+        Self {
+            sound_id: "gentle-chimes".into(),
+            volume: 35,
+            sound_duration_seconds: default_notification_sound_duration_seconds(),
+            custom_sound: None,
+        }
+    }
+}
+
+const NOTIFICATION_SOUND_IDS: [&str; 7] = [
+    "gentle-chimes",
+    "deep-drop",
+    "small-bell",
+    "gentle-piano",
+    "quiet-kalimba",
+    "custom",
+    "silent",
+];
+
+fn normalize_notification_settings(settings: &mut NotificationSettings) -> bool {
+    let mut changed = false;
+    if settings.volume > 100 {
+        settings.volume = 100;
+        changed = true;
+    }
+    if !(3..=60).contains(&settings.sound_duration_seconds) {
+        settings.sound_duration_seconds = settings.sound_duration_seconds.clamp(3, 60);
+        changed = true;
+    }
+    if !NOTIFICATION_SOUND_IDS.contains(&settings.sound_id.as_str())
+        || (settings.sound_id == "custom" && settings.custom_sound.is_none())
+    {
+        settings.sound_id = "gentle-chimes".into();
+        changed = true;
+    }
+    changed
+}
+
+fn normalize_ui_scale_percent(settings: &mut AppSettings) -> bool {
+    let previous = settings.ui_scale_percent;
+    let clamped = settings.ui_scale_percent.clamp(80, 130);
+    settings.ui_scale_percent = ((u16::from(clamped) + 2) / 5 * 5) as u8;
+    settings.ui_scale_percent != previous
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 struct GoogleIntegrationSettings {
@@ -244,6 +372,36 @@ struct GoogleIntegrationSettings {
     client: Option<GoogleOAuthClient>,
     #[serde(default)]
     accounts: Vec<GoogleAccount>,
+    #[serde(default)]
+    default_sync_targets: Vec<String>,
+}
+
+fn normalize_google_default_sync_targets(google: &mut GoogleIntegrationSettings) -> bool {
+    let active_account_ids = google
+        .accounts
+        .iter()
+        .filter(|account| account.sync_enabled)
+        .map(|account| account.id.clone())
+        .collect::<HashSet<_>>();
+    let previous = google.default_sync_targets.clone();
+    let mut seen = HashSet::new();
+    google.default_sync_targets.retain(|account_id| {
+        active_account_ids.contains(account_id) && seen.insert(account_id.clone())
+    });
+    google.default_sync_targets != previous
+}
+
+fn google_default_sync_targets_are_valid(google: &GoogleIntegrationSettings) -> bool {
+    let active_account_ids = google
+        .accounts
+        .iter()
+        .filter(|account| account.sync_enabled)
+        .map(|account| account.id.as_str())
+        .collect::<HashSet<_>>();
+    let mut seen = HashSet::new();
+    google.default_sync_targets.iter().all(|account_id| {
+        active_account_ids.contains(account_id.as_str()) && seen.insert(account_id.as_str())
+    })
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -265,7 +423,9 @@ impl Default for AppData {
             settings: AppSettings {
                 theme: "morning-mist".into(),
                 sidebar_collapsed: false,
+                ui_scale_percent: default_ui_scale_percent(),
                 window_display_mode: WindowDisplayMode::Taskbar,
+                notifications: NotificationSettings::default(),
                 google: GoogleIntegrationSettings::default(),
             },
         }
@@ -380,6 +540,113 @@ fn portable_data_dir() -> Result<PathBuf, String> {
     Ok(parent.join("data"))
 }
 
+fn auto_start_script_path() -> Result<PathBuf, String> {
+    let local_app_data = std::env::var_os("LOCALAPPDATA")
+        .ok_or_else(|| "Windowsのローカル保存場所を確認できません".to_string())?;
+    Ok(PathBuf::from(local_app_data)
+        .join("Koyomado")
+        .join("autostart.vbs"))
+}
+
+fn build_auto_start_script(target: &Path) -> Result<String, String> {
+    let target = target
+        .to_str()
+        .ok_or_else(|| "自動起動するファイルの場所を文字列へ変換できません".to_string())?;
+    if target.contains('\r') || target.contains('\n') {
+        return Err("自動起動するファイルの場所に使用できない文字が含まれています".into());
+    }
+    let target = target.replace('"', "\"\"");
+    Ok(format!(
+        "Option Explicit\r\n\
+Dim fso, shell, target, retry, alreadyRunning, process\r\n\
+target = \"{target}\"\r\n\
+Set fso = CreateObject(\"Scripting.FileSystemObject\")\r\n\
+Set shell = CreateObject(\"WScript.Shell\")\r\n\
+For retry = 1 To 150\r\n\
+  alreadyRunning = False\r\n\
+  On Error Resume Next\r\n\
+  For Each process In GetObject(\"winmgmts:\\\\.\\root\\cimv2\").ExecQuery(\"SELECT ExecutablePath FROM Win32_Process WHERE Name = 'koyomado.exe'\")\r\n\
+    If Not IsNull(process.ExecutablePath) Then\r\n\
+      If LCase(process.ExecutablePath) = LCase(target) Then alreadyRunning = True\r\n\
+    End If\r\n\
+  Next\r\n\
+  On Error GoTo 0\r\n\
+  If alreadyRunning Then WScript.Quit 0\r\n\
+  If fso.FileExists(target) Then\r\n\
+    shell.Run Chr(34) & target & Chr(34), 1, False\r\n\
+    WScript.Quit 0\r\n\
+  End If\r\n\
+  WScript.Sleep 2000\r\n\
+Next\r\n"
+    ))
+}
+
+fn encode_utf16le_with_bom(content: &str) -> Vec<u8> {
+    let mut bytes = Vec::with_capacity(content.len() * 2 + 2);
+    bytes.extend_from_slice(&[0xff, 0xfe]);
+    for unit in content.encode_utf16() {
+        bytes.extend_from_slice(&unit.to_le_bytes());
+    }
+    bytes
+}
+
+fn auto_start_manager(script_path: &Path) -> AutoLaunch {
+    let script_argument = format!("\"{}\"", script_path.display());
+    AutoLaunch::new(AUTOSTART_ENTRY_NAME, "wscript.exe", &[script_argument])
+}
+
+fn install_resilient_auto_start() -> Result<(), String> {
+    let target = std::env::current_exe()
+        .map_err(|error| format!("自動起動するファイルの場所を確認できません: {error}"))?;
+    let script_path = auto_start_script_path()?;
+    let script = build_auto_start_script(&target)?;
+    let parent = script_path
+        .parent()
+        .ok_or_else(|| "自動起動用フォルダーを確認できません".to_string())?;
+    fs::create_dir_all(parent)
+        .map_err(|error| format!("自動起動用フォルダーを作成できません: {error}"))?;
+    fs::write(&script_path, encode_utf16le_with_bom(&script))
+        .map_err(|error| format!("自動起動用ファイルを保存できません: {error}"))?;
+    auto_start_manager(&script_path)
+        .enable()
+        .map_err(|error| format!("Windowsの自動起動へ登録できません: {error}"))
+}
+
+#[tauri::command]
+fn get_auto_start_state() -> Result<bool, String> {
+    let script_path = auto_start_script_path()?;
+    auto_start_manager(&script_path)
+        .is_enabled()
+        .map_err(|error| format!("自動起動の状態を確認できません: {error}"))
+}
+
+#[tauri::command]
+fn repair_auto_start() -> Result<(), String> {
+    install_resilient_auto_start()
+}
+
+#[tauri::command]
+fn set_auto_start_state(enabled: bool) -> Result<(), String> {
+    let script_path = auto_start_script_path()?;
+    let manager = auto_start_manager(&script_path);
+    if enabled {
+        return install_resilient_auto_start();
+    }
+    if manager
+        .is_enabled()
+        .map_err(|error| format!("自動起動の状態を確認できません: {error}"))?
+    {
+        manager
+            .disable()
+            .map_err(|error| format!("Windowsの自動起動を解除できません: {error}"))?;
+    }
+    if script_path.exists() {
+        fs::remove_file(&script_path)
+            .map_err(|error| format!("自動起動用ファイルを削除できません: {error}"))?;
+    }
+    Ok(())
+}
+
 fn backup_path(path: &Path) -> PathBuf {
     let stem = path
         .file_stem()
@@ -463,15 +730,14 @@ fn read_json_with_recovery<T: DeserializeOwned + Serialize>(
     }
 }
 
-fn load_app_data_inner() -> Result<AppData, String> {
-    let path = portable_data_dir()?.join("calendar-data.json");
-    let mut data: AppData = read_json_with_recovery(&path)?.unwrap_or_default();
+fn load_app_data_from_path(path: &Path) -> Result<AppData, String> {
+    let mut data: AppData = read_json_with_recovery(path)?.unwrap_or_default();
     let mut should_write = !path.exists();
-    if data.version == 1 || data.version == 2 {
+    if (1..CALENDAR_DATA_VERSION).contains(&data.version) {
         let migration_backup =
             path.with_file_name(format!("calendar-data.v{}.backup.json", data.version));
         if path.exists() && !migration_backup.exists() {
-            fs::copy(&path, &migration_backup)
+            fs::copy(path, &migration_backup)
                 .map_err(|error| format!("移行前バックアップを作成できません: {error}"))?;
         }
         for event in data.events.iter_mut() {
@@ -492,14 +758,23 @@ fn load_app_data_inner() -> Result<AppData, String> {
     }
     for event in data.events.iter_mut() {
         should_write |= normalize_event_range(event);
+        should_write |= normalize_event_reminders(event);
     }
     for deleted in data.deleted_events.iter_mut() {
         should_write |= normalize_event_range(&mut deleted.event);
+        should_write |= normalize_event_reminders(&mut deleted.event);
     }
+    should_write |= normalize_notification_settings(&mut data.settings.notifications);
+    should_write |= normalize_ui_scale_percent(&mut data.settings);
+    should_write |= normalize_google_default_sync_targets(&mut data.settings.google);
     if should_write {
-        write_json_with_backup(&path, &data)?;
+        write_json_with_backup(path, &data)?;
     }
     Ok(data)
+}
+
+fn load_app_data_inner() -> Result<AppData, String> {
+    load_app_data_from_path(&portable_data_dir()?.join("calendar-data.json"))
 }
 
 #[tauri::command]
@@ -532,7 +807,153 @@ fn save_app_data(data: AppData) -> Result<(), String> {
     if data.settings.google.accounts.len() > 3 {
         return Err("Googleアカウントは3件まで接続できます".into());
     }
+    if !google_default_sync_targets_are_valid(&data.settings.google) {
+        return Err("新しい予定のGoogle既定保存先が正しくありません".into());
+    }
+    if data.events.iter().any(|event| {
+        event.reminders.popup_minutes.len() + event.reminders.email_minutes.len() > 5
+            || event
+                .reminders
+                .popup_minutes
+                .iter()
+                .chain(event.reminders.email_minutes.iter())
+                .any(|minutes| *minutes > 40_320)
+    }) {
+        return Err("通知は各方式5件まで、予定開始の4週間前までで設定してください".into());
+    }
+    if data.settings.notifications.volume > 100
+        || !(3..=60).contains(&data.settings.notifications.sound_duration_seconds)
+        || !NOTIFICATION_SOUND_IDS.contains(&data.settings.notifications.sound_id.as_str())
+        || (data.settings.notifications.sound_id == "custom"
+            && data.settings.notifications.custom_sound.is_none())
+    {
+        return Err("通知音の設定が正しくありません".into());
+    }
+    if !(80..=130).contains(&data.settings.ui_scale_percent)
+        || data.settings.ui_scale_percent % 5 != 0
+    {
+        return Err("表示倍率は80～130%の5%刻みで設定してください".into());
+    }
     write_json_with_backup(&portable_data_dir()?.join("calendar-data.json"), &data)
+}
+
+const MAX_CUSTOM_NOTIFICATION_SOUND_BYTES: usize = 15 * 1024 * 1024;
+
+fn supported_notification_sound(
+    file_name: &str,
+    bytes: &[u8],
+) -> Option<(&'static str, &'static str, &'static str)> {
+    let extension = Path::new(file_name)
+        .extension()?
+        .to_string_lossy()
+        .to_ascii_lowercase();
+    let starts_with = |signature: &[u8]| bytes.starts_with(signature);
+    match extension.as_str() {
+        "wav" if starts_with(b"RIFF") && bytes.get(8..12) == Some(b"WAVE") => {
+            Some(("wav", "audio/wav", "audio"))
+        }
+        "mp3"
+            if starts_with(b"ID3")
+                || bytes
+                    .get(0..2)
+                    .is_some_and(|head| head[0] == 0xff && head[1] & 0xe0 == 0xe0) =>
+        {
+            Some(("mp3", "audio/mpeg", "audio"))
+        }
+        "m4a" | "mp4" if bytes.get(4..8) == Some(b"ftyp") => Some(("m4a", "audio/mp4", "audio")),
+        "aac"
+            if bytes
+                .get(0..2)
+                .is_some_and(|head| head[0] == 0xff && head[1] & 0xf6 == 0xf0) =>
+        {
+            Some(("aac", "audio/aac", "audio"))
+        }
+        "ogg" | "oga" | "opus" if starts_with(b"OggS") => Some(("ogg", "audio/ogg", "audio")),
+        "flac" if starts_with(b"fLaC") => Some(("flac", "audio/flac", "audio")),
+        "mid" | "midi" if starts_with(b"MThd") => Some(("mid", "audio/midi", "midi")),
+        _ => None,
+    }
+}
+
+#[tauri::command]
+fn save_custom_notification_sound(
+    file_name: String,
+    bytes: Vec<u8>,
+) -> Result<CustomNotificationSound, String> {
+    if bytes.is_empty() || bytes.len() > MAX_CUSTOM_NOTIFICATION_SOUND_BYTES {
+        return Err("通知音は15 MB以内のファイルを選択してください".into());
+    }
+    let (extension, mime_type, kind) = supported_notification_sound(&file_name, &bytes)
+        .ok_or_else(|| "対応している音声ファイル（MP3 / M4A / AAC / WAV / OGG / Opus / FLAC / MIDI）を選択してください".to_string())?;
+    let directory = portable_data_dir()?.join("notification-sounds");
+    fs::create_dir_all(&directory)
+        .map_err(|error| format!("通知音フォルダーを作成できません: {error}"))?;
+    let stored_file_name = format!("custom.{extension}");
+    let destination = directory.join(&stored_file_name);
+    let temporary = directory.join(format!("{stored_file_name}.tmp"));
+    let previous = directory.join(format!("{stored_file_name}.previous"));
+    fs::write(&temporary, &bytes)
+        .map_err(|error| format!("通知音を一時保存できません: {error}"))?;
+    if previous.exists() {
+        fs::remove_file(&previous)
+            .map_err(|error| format!("以前の通知音バックアップを整理できません: {error}"))?;
+    }
+    if destination.exists() {
+        fs::rename(&destination, &previous)
+            .map_err(|error| format!("以前の通知音を置き換えられません: {error}"))?;
+    }
+    if let Err(error) = fs::rename(&temporary, &destination) {
+        if previous.exists() {
+            let _ = fs::rename(&previous, &destination);
+        }
+        let _ = fs::remove_file(&temporary);
+        return Err(format!("通知音を保存できません: {error}"));
+    }
+    if previous.exists() {
+        let _ = fs::remove_file(&previous);
+    }
+    for entry in fs::read_dir(&directory)
+        .map_err(|error| format!("通知音フォルダーを確認できません: {error}"))?
+        .flatten()
+    {
+        let path = entry.path();
+        if path != destination
+            && path
+                .file_stem()
+                .is_some_and(|stem| stem.to_string_lossy() == "custom")
+        {
+            let _ = fs::remove_file(path);
+        }
+    }
+    let display_name = Path::new(&file_name)
+        .file_name()
+        .map(|name| name.to_string_lossy().chars().take(120).collect())
+        .filter(|name: &String| !name.trim().is_empty())
+        .unwrap_or_else(|| stored_file_name.clone());
+    Ok(CustomNotificationSound {
+        display_name,
+        stored_file_name,
+        mime_type: mime_type.into(),
+        kind: kind.into(),
+    })
+}
+
+#[tauri::command]
+fn load_custom_notification_sound(stored_file_name: String) -> Result<Vec<u8>, String> {
+    let file_name = Path::new(&stored_file_name)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| "通知音のファイル名が正しくありません".to_string())?;
+    if file_name != stored_file_name || !file_name.starts_with("custom.") {
+        return Err("通知音のファイル名が正しくありません".into());
+    }
+    let path = portable_data_dir()?
+        .join("notification-sounds")
+        .join(file_name);
+    let bytes = fs::read(&path).map_err(|error| format!("通知音を読み込めません: {error}"))?;
+    supported_notification_sound(file_name, &bytes)
+        .ok_or_else(|| "保存されている通知音の形式を確認できません".to_string())?;
+    Ok(bytes)
 }
 
 #[tauri::command]
@@ -918,6 +1339,11 @@ fn show_main_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     }
 }
 
+#[tauri::command]
+fn show_main_window_for_notification(app: tauri::AppHandle) {
+    show_main_window(&app);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -928,10 +1354,6 @@ pub fn run() {
             restoring: true,
         })))
         .manage(DisplayModeState(Mutex::new(WindowDisplayMode::Taskbar)))
-        .plugin(tauri_plugin_autostart::init(
-            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
-            None,
-        ))
         .setup(|app| {
             let app_data = load_app_data_inner().unwrap_or_default();
             let display_mode = app_data.settings.window_display_mode;
@@ -1068,8 +1490,14 @@ pub fn run() {
             load_app_data,
             save_app_data,
             get_data_directory,
+            get_auto_start_state,
+            repair_auto_start,
+            set_auto_start_state,
             set_sidebar_window_mode,
             set_window_display_mode,
+            save_custom_notification_sound,
+            load_custom_notification_sound,
+            show_main_window_for_notification,
             google::google_connect_account,
             google::google_list_calendars,
             google::google_credential_statuses,
@@ -1104,6 +1532,225 @@ mod tests {
         assert_eq!(data.version, CALENDAR_DATA_VERSION);
         assert!(data.events.is_empty());
         assert_eq!(data.settings.theme, "morning-mist");
+        assert_eq!(data.settings.ui_scale_percent, 100);
+        assert!(data.settings.google.default_sync_targets.is_empty());
+        assert_eq!(data.settings.notifications.sound_id, "gentle-chimes");
+        assert_eq!(data.settings.notifications.sound_duration_seconds, 12);
+        assert!(EventReminders::default().use_google_default);
+    }
+
+    #[test]
+    fn notification_duration_is_clamped_to_supported_range() {
+        let mut settings = NotificationSettings {
+            sound_duration_seconds: 0,
+            ..NotificationSettings::default()
+        };
+        assert!(normalize_notification_settings(&mut settings));
+        assert_eq!(settings.sound_duration_seconds, 3);
+        settings.sound_duration_seconds = 100;
+        assert!(normalize_notification_settings(&mut settings));
+        assert_eq!(settings.sound_duration_seconds, 60);
+    }
+
+    #[test]
+    fn ui_scale_is_clamped_and_rounded_to_supported_steps() {
+        let mut settings = AppData::default().settings;
+        settings.ui_scale_percent = 40;
+        assert!(normalize_ui_scale_percent(&mut settings));
+        assert_eq!(settings.ui_scale_percent, 80);
+        settings.ui_scale_percent = 127;
+        assert!(normalize_ui_scale_percent(&mut settings));
+        assert_eq!(settings.ui_scale_percent, 125);
+        settings.ui_scale_percent = 200;
+        assert!(normalize_ui_scale_percent(&mut settings));
+        assert_eq!(settings.ui_scale_percent, 130);
+    }
+
+    #[test]
+    fn version_four_file_migrates_with_backup_and_notification_defaults() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time should be available")
+            .as_nanos();
+        let directory = std::env::temp_dir().join(format!(
+            "koyomado-v4-migration-{}-{unique}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&directory).expect("test directory should be created");
+        let path = directory.join("calendar-data.json");
+        let mut legacy = serde_json::to_value(AppData::default()).expect("data should serialize");
+        legacy["version"] = serde_json::json!(4);
+        legacy["settings"]
+            .as_object_mut()
+            .expect("settings should be an object")
+            .remove("notifications");
+        fs::write(
+            &path,
+            serde_json::to_vec_pretty(&legacy).expect("legacy data should serialize"),
+        )
+        .expect("legacy file should be written");
+
+        let migrated = load_app_data_from_path(&path).expect("version 4 should migrate");
+        assert_eq!(migrated.version, CALENDAR_DATA_VERSION);
+        assert_eq!(migrated.settings.notifications.volume, 35);
+        assert_eq!(migrated.settings.notifications.sound_duration_seconds, 12);
+        assert!(directory.join("calendar-data.v4.backup.json").exists());
+
+        fs::remove_dir_all(&directory).expect("test directory should be removed");
+    }
+
+    #[test]
+    fn notification_file_signatures_reject_renamed_or_unsupported_data() {
+        assert_eq!(
+            supported_notification_sound("tone.wav", b"RIFF\0\0\0\0WAVEdata"),
+            Some(("wav", "audio/wav", "audio"))
+        );
+        assert_eq!(
+            supported_notification_sound("song.mid", b"MThd\0\0\0\x06"),
+            Some(("mid", "audio/midi", "midi"))
+        );
+        assert!(supported_notification_sound("renamed.mp3", b"not audio").is_none());
+        assert!(supported_notification_sound("script.exe", b"MThd\0\0\0\x06").is_none());
+    }
+
+    #[test]
+    fn version_three_google_settings_without_defaults_remain_compatible() {
+        let google: GoogleIntegrationSettings = serde_json::from_value(serde_json::json!({
+            "enabled": true,
+            "client": null,
+            "accounts": []
+        }))
+        .expect("version 3 Google settings should deserialize");
+
+        assert!(google.default_sync_targets.is_empty());
+    }
+
+    #[test]
+    fn version_three_file_migrates_with_events_google_settings_and_backup() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time should be available")
+            .as_nanos();
+        let directory = std::env::temp_dir().join(format!(
+            "koyomado-v3-migration-{}-{unique}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&directory).expect("test directory should be created");
+        let path = directory.join("calendar-data.json");
+        let migration_backup = directory.join("calendar-data.v3.backup.json");
+        let legacy_json = serde_json::json!({
+            "version": 3,
+            "events": [{
+                "id": "legacy-event",
+                "title": "移行前の予定",
+                "date": "2026-08-23",
+                "allDay": true,
+                "startTime": "",
+                "endTime": "",
+                "location": "会議室",
+                "notes": "予定を保持する",
+                "style": { "color": "#78a88f" },
+                "syncTargets": ["active"],
+                "createdAt": "2026-08-22T00:00:00.000Z",
+                "updatedAt": "2026-08-22T00:00:00.000Z"
+            }],
+            "deletedEvents": [{
+                "id": "deleted-event",
+                "title": "削除済みの予定",
+                "date": "2026-08-24",
+                "allDay": true,
+                "startTime": "",
+                "endTime": "",
+                "location": "",
+                "notes": "削除情報を保持する",
+                "style": { "color": "#86abc7" },
+                "createdAt": "2026-08-22T01:00:00.000Z",
+                "updatedAt": "2026-08-22T01:00:00.000Z",
+                "deletedAt": "2026-08-22T02:00:00.000Z"
+            }],
+            "settings": {
+                "theme": "moonlit-water",
+                "sidebarCollapsed": true,
+                "windowDisplayMode": "both",
+                "google": {
+                    "enabled": true,
+                    "client": null,
+                    "accounts": [{
+                        "id": "active",
+                        "email": "active@example.invalid",
+                        "displayName": "Active",
+                        "calendarId": "primary",
+                        "calendarName": "Main",
+                        "syncEnabled": true,
+                        "syncToken": "sync-token-is-not-a-credential"
+                    }]
+                }
+            }
+        });
+        fs::write(
+            &path,
+            serde_json::to_vec_pretty(&legacy_json).expect("legacy JSON should serialize"),
+        )
+        .expect("legacy file should be written");
+
+        let migrated = load_app_data_from_path(&path).expect("version 3 file should migrate");
+        assert_eq!(migrated.version, CALENDAR_DATA_VERSION);
+        assert_eq!(migrated.events.len(), 1);
+        assert_eq!(migrated.events[0].title, "移行前の予定");
+        assert_eq!(migrated.events[0].end_date, "2026-08-23");
+        assert_eq!(migrated.deleted_events.len(), 1);
+        assert_eq!(migrated.deleted_events[0].event.title, "削除済みの予定");
+        assert_eq!(migrated.settings.theme, "moonlit-water");
+        assert!(migrated.settings.sidebar_collapsed);
+        assert_eq!(migrated.settings.google.accounts.len(), 1);
+        assert_eq!(
+            migrated.settings.google.accounts[0].email,
+            "active@example.invalid"
+        );
+        assert!(migrated.settings.google.default_sync_targets.is_empty());
+        assert!(migration_backup.exists());
+        let backup: AppData = serde_json::from_slice(
+            &fs::read(&migration_backup).expect("migration backup should be readable"),
+        )
+        .expect("migration backup should remain valid JSON");
+        assert_eq!(backup.version, 3);
+        assert_eq!(backup.events[0].title, "移行前の予定");
+        assert_eq!(backup.deleted_events[0].event.title, "削除済みの予定");
+
+        fs::remove_dir_all(&directory).expect("test directory should be removed");
+    }
+
+    #[test]
+    fn google_defaults_keep_only_unique_active_accounts() {
+        let mut google: GoogleIntegrationSettings = serde_json::from_value(serde_json::json!({
+            "enabled": true,
+            "client": null,
+            "accounts": [
+                {
+                    "id": "active",
+                    "email": "active@example.invalid",
+                    "displayName": "Active",
+                    "calendarId": "primary",
+                    "calendarName": "Main",
+                    "syncEnabled": true
+                },
+                {
+                    "id": "paused",
+                    "email": "paused@example.invalid",
+                    "displayName": "Paused",
+                    "calendarId": "primary",
+                    "calendarName": "Main",
+                    "syncEnabled": false
+                }
+            ],
+            "defaultSyncTargets": ["active", "active", "paused", "missing"]
+        }))
+        .expect("Google settings should deserialize");
+
+        assert!(!google_default_sync_targets_are_valid(&google));
+        assert!(normalize_google_default_sync_targets(&mut google));
+        assert_eq!(google.default_sync_targets, vec!["active"]);
+        assert!(google_default_sync_targets_are_valid(&google));
     }
 
     #[test]
@@ -1171,6 +1818,28 @@ mod tests {
         assert_eq!(
             backup_path(&path),
             PathBuf::from("data/calendar-data.backup.json")
+        );
+    }
+
+    #[test]
+    fn auto_start_script_waits_for_portable_executable_and_avoids_duplicates() {
+        let target = PathBuf::from(r"G:\マイドライブ\Koyomado\koyomado.exe");
+        let script = build_auto_start_script(&target).expect("script should be generated");
+        assert!(script.contains(r#"target = "G:\マイドライブ\Koyomado\koyomado.exe""#));
+        assert!(script.contains("For retry = 1 To 150"));
+        assert!(script.contains("WScript.Sleep 2000"));
+        assert!(script.contains("alreadyRunning"));
+        assert!(script.contains("fso.FileExists(target)"));
+    }
+
+    #[test]
+    fn auto_start_script_is_encoded_as_utf16le_with_bom() {
+        let encoded = encode_utf16le_with_bom("予定");
+        assert_eq!(&encoded[..2], &[0xff, 0xfe]);
+        assert_eq!(
+            &encoded[2..],
+            &[0x88, 0x4e, 0x9a, 0x5b],
+            "Japanese paths must remain readable by Windows Script Host"
         );
     }
 

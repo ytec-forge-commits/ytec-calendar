@@ -30,13 +30,20 @@ from reportlab.platypus import (
 ROOT = Path(__file__).resolve().parents[1]
 ASSET_DIR = ROOT / "docs" / "manual-assets"
 VERSION = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))["version"]
-RELEASE_DATE = "2026年8月22日"
+RELEASE_DATE = "2026年8月23日"
 OFFICIAL_URL = "https://ytec.cloudfree.jp/ytb/koyomado/"
 SOURCE_URL = "https://github.com/ytec-commits/ytec-calendar"
 GOOGLE_CONSOLE_URL = "https://console.cloud.google.com/"
+GOOGLE_PROJECT_CREATE_URL = "https://console.cloud.google.com/projectcreate"
+GOOGLE_CALENDAR_API_URL = "https://console.cloud.google.com/apis/library/calendar-json.googleapis.com"
+GOOGLE_AUTH_OVERVIEW_URL = "https://console.cloud.google.com/auth/overview"
+GOOGLE_AUTH_AUDIENCE_URL = "https://console.cloud.google.com/auth/audience"
+GOOGLE_AUTH_CLIENTS_URL = "https://console.cloud.google.com/auth/clients"
 GOOGLE_CREDENTIALS_URL = "https://developers.google.com/workspace/guides/create-credentials#desktop-app"
 GOOGLE_USER_DATA_URL = "https://developers.google.com/terms/api-services-user-data-policy"
-TOTAL_PAGES = 18
+GOOGLE_AUDIENCE_HELP_URL = "https://support.google.com/cloud/answer/15549945?hl=ja"
+GOOGLE_VERIFICATION_HELP_URL = "https://support.google.com/cloud/answer/13464323?hl=ja"
+TOTAL_PAGES = 27
 
 PAGE_W, PAGE_H = A4
 MARGIN_X = 17 * mm
@@ -154,6 +161,41 @@ def build_styles() -> dict[str, ParagraphStyle]:
             fontSize=8.5, leading=13, textColor=PURPLE_DARK, alignment=TA_CENTER,
             wordWrap="CJK",
         ),
+        "ui_header": ParagraphStyle(
+            "UiHeader", parent=samples["Normal"], fontName="KoyomadoBold",
+            fontSize=8.2, leading=11, textColor=INK, wordWrap="CJK",
+        ),
+        "ui_nav": ParagraphStyle(
+            "UiNav", parent=samples["Normal"], fontName="KoyomadoRegular",
+            fontSize=7.1, leading=10, textColor=MUTED, wordWrap="CJK",
+        ),
+        "ui_nav_active": ParagraphStyle(
+            "UiNavActive", parent=samples["Normal"], fontName="KoyomadoBold",
+            fontSize=7.1, leading=10, textColor=PURPLE_DARK, wordWrap="CJK",
+        ),
+        "ui_title": ParagraphStyle(
+            "UiTitle", parent=samples["Normal"], fontName="KoyomadoBold",
+            fontSize=8, leading=11, textColor=INK, spaceAfter=0.5 * mm,
+            wordWrap="CJK",
+        ),
+        "ui_body": ParagraphStyle(
+            "UiBody", parent=samples["Normal"], fontName="KoyomadoRegular",
+            fontSize=7, leading=10.5, textColor=MUTED, wordWrap="CJK",
+        ),
+        "ui_badge": ParagraphStyle(
+            "UiBadge", parent=samples["Normal"], fontName="KoyomadoBold",
+            fontSize=10, leading=12, textColor=WHITE, alignment=TA_CENTER,
+        ),
+        "roadmap_title": ParagraphStyle(
+            "RoadmapTitle", parent=samples["Normal"], fontName="KoyomadoBold",
+            fontSize=7.5, leading=10.5, textColor=INK, alignment=TA_CENTER,
+            spaceAfter=0.4 * mm, wordWrap="CJK",
+        ),
+        "roadmap_body": ParagraphStyle(
+            "RoadmapBody", parent=samples["Normal"], fontName="KoyomadoRegular",
+            fontSize=6.4, leading=9, textColor=MUTED, alignment=TA_CENTER,
+            wordWrap="CJK",
+        ),
     }
 
 
@@ -178,6 +220,53 @@ def screenshot(filename: str, width: float = 164 * mm) -> Image:
     image.drawHeight = width * aspect_ratio
     image.hAlign = "CENTER"
     return image
+
+
+def screenshot_figure(
+    filename: str,
+    caption: str,
+    styles: dict[str, ParagraphStyle],
+    width: float = 164 * mm,
+) -> KeepTogether:
+    return KeepTogether([
+        screenshot(filename, width),
+        Spacer(1, 1.2 * mm),
+        p(caption, styles["muted"]),
+    ])
+
+
+def url_link(label: str, url: str, styles: dict[str, ParagraphStyle]) -> Paragraph:
+    return p(f'<link href="{url}" color="#5f5278"><b>{label}</b>: {url}</link>', styles["body_small"])
+
+
+def screenshot_pair(
+    left: tuple[str, str],
+    right: tuple[str, str],
+    styles: dict[str, ParagraphStyle],
+) -> Table:
+    gap = 4 * mm
+    cell_width = (CONTENT_W - gap) / 2
+    image_width = cell_width - 5 * mm
+    cells = []
+    for filename, caption in (left, right):
+        cells.append([
+            screenshot(filename, image_width),
+            Spacer(1, 1.2 * mm),
+            p(caption, styles["body_tiny"]),
+        ])
+    table = Table([[cells[0], "", cells[1]]], colWidths=[cell_width, gap, cell_width], hAlign="LEFT")
+    table.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("BACKGROUND", (0, 0), (0, 0), colors.HexColor("#fbfafc")),
+        ("BACKGROUND", (2, 0), (2, 0), colors.HexColor("#fbfafc")),
+        ("BOX", (0, 0), (0, 0), 0.6, LINE),
+        ("BOX", (2, 0), (2, 0), 0.6, LINE),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 2 * mm),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2 * mm),
+    ]))
+    return table
 
 
 def card(title: str, body: str, styles: dict[str, ParagraphStyle], background=PURPLE_PALE) -> Table:
@@ -284,6 +373,160 @@ def data_table(rows: list[tuple[str, str]], styles: dict[str, ParagraphStyle], f
         commands.append(("BACKGROUND", (0, index), (0, index), PURPLE_PALE if index % 2 == 0 else SKY_PALE))
     table.setStyle(TableStyle(commands))
     return table
+
+
+def compact_steps(
+    items: list[tuple[int, str, str]],
+    width: float,
+    styles: dict[str, ParagraphStyle],
+) -> Table:
+    rows = []
+    for number, title, body in items:
+        badge = Table(
+            [[p(str(number), styles["ui_badge"])]],
+            colWidths=[8 * mm],
+            rowHeights=[8 * mm],
+        )
+        badge.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), PURPLE),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 0),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+            ("TOPPADDING", (0, 0), (-1, -1), 0),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+        ]))
+        rows.append([badge, [p(title, styles["ui_title"]), p(body, styles["ui_body"])]] )
+
+    table = Table(rows, colWidths=[11 * mm, width - 11 * mm], hAlign="LEFT")
+    table.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 1.2 * mm),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 1.2 * mm),
+        ("TOPPADDING", (0, 0), (-1, -1), 1.5 * mm),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 1.5 * mm),
+        ("LINEBELOW", (0, 0), (-1, -2), 0.4, LINE),
+    ]))
+    return table
+
+
+def roadmap(items: list[tuple[int, str, str]], styles: dict[str, ParagraphStyle]) -> Table:
+    chunks = [chunk for chunk in (items[:4], items[4:]) if chunk]
+    rows = []
+    for chunk_index, chunk in enumerate(chunks):
+        col_width = CONTENT_W / len(chunk)
+        cells = []
+        for number, title, body in chunk:
+            badge = Table(
+                [[p(str(number), styles["ui_badge"])]],
+                colWidths=[7 * mm],
+                rowHeights=[7 * mm],
+                hAlign="CENTER",
+            )
+            badge.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, -1), PURPLE),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+            ]))
+            cells.append([badge, p(title, styles["roadmap_title"]), p(body, styles["roadmap_body"])])
+        row = Table([cells], colWidths=[col_width] * len(chunk), hAlign="LEFT")
+        row.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), PURPLE_PALE if chunk_index == 0 else GREEN_PALE),
+            ("BOX", (0, 0), (-1, -1), 0.7, LINE),
+            ("INNERGRID", (0, 0), (-1, -1), 0.5, LINE),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 2 * mm),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 2 * mm),
+            ("TOPPADDING", (0, 0), (-1, -1), 2 * mm),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 2 * mm),
+        ]))
+        rows.append([row])
+        if chunk_index == 0 and len(chunks) > 1:
+            rows.append([p("↓  続いてGoogle Auth Platformを設定", styles["muted"])])
+
+    outer = Table(rows, colWidths=[CONTENT_W], hAlign="LEFT")
+    outer.setStyle(TableStyle([
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 1 * mm),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 1 * mm),
+    ]))
+    return outer
+
+
+def console_diagram(
+    product: str,
+    project: str,
+    nav_items: list[str],
+    active: str,
+    heading: str,
+    rows: list[tuple[int, str, str]],
+    styles: dict[str, ParagraphStyle],
+) -> Table:
+    top = Table(
+        [[
+            p(f"Google Cloud  /  {product}", styles["ui_header"]),
+            p(f"プロジェクト: {project}", styles["ui_nav_active"]),
+            p("検索", styles["ui_nav"]),
+        ]],
+        colWidths=[57 * mm, 72 * mm, CONTENT_W - 129 * mm],
+    )
+    top.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f7f7fa")),
+        ("BOX", (0, 0), (-1, -1), 0.7, LINE),
+        ("INNERGRID", (0, 0), (-1, -1), 0.4, LINE),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 2.4 * mm),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 2.4 * mm),
+        ("TOPPADDING", (0, 0), (-1, -1), 2.2 * mm),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2.2 * mm),
+    ]))
+
+    nav_rows = [[p(label, styles["ui_nav_active"] if label == active else styles["ui_nav"])] for label in nav_items]
+    nav = Table(nav_rows, colWidths=[38 * mm], hAlign="LEFT")
+    nav_commands = [
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#faf9fc")),
+        ("BOX", (0, 0), (-1, -1), 0.7, LINE),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 3 * mm),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 2 * mm),
+        ("TOPPADDING", (0, 0), (-1, -1), 2 * mm),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2 * mm),
+    ]
+    active_index = nav_items.index(active)
+    nav_commands.extend([
+        ("BACKGROUND", (0, active_index), (0, active_index), PURPLE_PALE),
+        ("LINEBEFORE", (0, active_index), (0, active_index), 2, PURPLE),
+    ])
+    nav.setStyle(TableStyle(nav_commands))
+
+    body_width = CONTENT_W - 38 * mm
+    body = [p(heading, styles["ui_header"]), compact_steps(rows, body_width - 8 * mm, styles)]
+    lower = Table([[nav, body]], colWidths=[38 * mm, body_width], hAlign="LEFT")
+    lower.setStyle(TableStyle([
+        ("BOX", (0, 0), (-1, -1), 0.7, LINE),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (0, -1), 0),
+        ("RIGHTPADDING", (0, 0), (0, -1), 0),
+        ("TOPPADDING", (0, 0), (0, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (0, -1), 0),
+        ("LEFTPADDING", (1, 0), (1, -1), 4 * mm),
+        ("RIGHTPADDING", (1, 0), (1, -1), 4 * mm),
+        ("TOPPADDING", (1, 0), (1, -1), 3 * mm),
+        ("BOTTOMPADDING", (1, 0), (1, -1), 3 * mm),
+    ]))
+
+    screen = Table([[top], [lower]], colWidths=[CONTENT_W], hAlign="LEFT")
+    screen.setStyle(TableStyle([
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    return screen
 
 
 def decorate_page(canvas, doc) -> None:
@@ -482,7 +725,7 @@ def build_story(styles: dict[str, ParagraphStyle]) -> list:
     # 9: appearance
     page_title(story, styles, "APPEARANCE", "背景・サイドバー・ウィンドウ", "デスクトップに馴染む8つの背景と、置き方に合わせた2段階の最小幅を用意しています。")
     story.extend([
-        screenshot("settings-v1.png", 145 * mm),
+        screenshot("settings-v1.png", 126 * mm),
         Spacer(1, 3 * mm),
         p("8つの背景テーマ", styles["h2"]),
         p("朝もや / 森の息吹 / 藤の夕暮れ / 陽だまり / 月夜の水面 / 空のそよ風 / 桜かすみ / 白樺の朝", styles["body"]),
@@ -490,6 +733,8 @@ def build_story(styles: dict[str, ParagraphStyle]) -> list:
             ("サイドバー表示中", "今日と直近7日間、背景テーマのショートカットを表示。最小幅は806pxです。"),
             ("サイドバー非表示", "カレンダーをコンパクトに表示。最小幅は375pxです。開き直すときは必要な幅まで自動で広がります。"),
         ], styles, [GREEN_PALE, SKY_PALE]),
+        Spacer(1, 3 * mm),
+        card("表示倍率をスライダーで調整", "右上の歯車にある「表示サイズ」で80～130%を5%刻みで選べます。変更中にすぐ見え方を確認でき、再起動後も維持します。「100%に戻す」で初期値へ戻せます。", styles, SAND_PALE),
         Spacer(1, 3 * mm),
         card("モニター構成ごとに位置を記憶", "移動・サイズ変更・サイドバーの開閉状態を自動保存します。3画面、2画面など構成ごとに最後の位置を分けて記憶するため、以前の構成へ戻ると、その構成で保存した位置へ戻ります。画面外の位置は使わず、見える位置へ戻します。", styles, PURPLE_PALE),
         PageBreak(),
@@ -511,19 +756,63 @@ def build_story(styles: dict[str, ParagraphStyle]) -> list:
         Spacer(1, 5 * mm),
         p("Windows起動時に自動起動", styles["h2"]),
         step(1, "右上の歯車を開く", "「表示と起動の設定」を開きます。", styles),
-        step(2, "自動起動をON", "「Windows起動時に自動起動」のスイッチを選びます。次回のWindowsサインイン時から起動します。", styles),
+        step(2, "自動起動をON", "「Windows起動時に自動起動」のスイッチを選びます。次回のWindowsサインイン時から起動します。Google Driveなどの準備が遅い場合は、実行ファイルが利用可能になるまで最大5分待機します。", styles),
         step(3, "フォルダーを移動するときは登録し直す", "移動前に自動起動をOFFにし、移動後のkoyomado.exeから再びONにします。", styles),
         card("起動したのに見えないとき", "表示先がトレイを含む場合は、通知領域と「隠れているインジケーター」を確認します。保存位置が現在のモニター構成の画面外なら、Koyomadoは見える位置へ自動的に戻します。", styles, SAND_PALE),
         PageBreak(),
     ])
 
-    # 11: data and update
+    # 11: reminder setup and popup
+    page_title(story, styles, "REMINDER", "予定の通知を設定する", "予定ごとに開始時刻のどのくらい前に知らせるかを設定します。通知はKoyomadoが起動している間だけ動作します。")
+    story.extend([
+        step(1, "予定の追加・編集を開く", "予定名、日時などを入力し、画面下部の「通知」までスクロールします。", styles),
+        step(2, "数値と単位を選ぶ", "「通知を追加」を押し、数値と「分前」「時間前」「日前」を選びます。例：12＋時間前、1＋日前。0分前は開始時刻、上限は28日前です。予定1件につきGoogleのメール通知を含めて最大5件です。", styles),
+        step(3, "Googleへ送る方法を選ぶ", "Google同期対象の予定では、「Googleカレンダーの既定設定を使う」か「上の通知時刻をGoogleにも保存する」を選びます。Googleから取得したメール通知も維持します。", styles),
+        step(4, "保存してKoyomadoを起動しておく", "通知時刻になると画面右下に予定名、日時、場所を表示します。トレイへ隠している場合もKoyomadoの画面を表示します。", styles),
+        Spacer(1, 4 * mm),
+        two_cards([
+            ("通知音は設定秒数で停止", "初期値は12秒です。歯車で3～60秒から選べます。先に「OK（音を止める）」を押した場合はすぐ止まり、ポップアップも閉じます。"),
+            ("ポップアップは残る", "音が自動停止しても予定のポップアップは残ります。「予定を開く」で編集画面へ、「OK」で確認済みにします。"),
+            ("終日予定", "開始日の0:00を基準にします。朝に知らせたい場合は時刻付き予定として登録する方法も検討してください。"),
+        ], styles, [GREEN_PALE, SKY_PALE, SAND_PALE]),
+        Spacer(1, 4 * mm),
+        card("通知を見逃した場合", "スリープ復帰や処理の遅れを考慮し、通知時刻から約2分以内は表示します。それより長くKoyomadoが終了・停止していた間の通知を、後からまとめて鳴らすことはありません。", styles, ROSE_PALE),
+        PageBreak(),
+    ])
+
+    # 12: notification sounds
+    page_title(story, styles, "NOTIFICATION SOUND", "通知音・音量・自分の音源", "右上の歯車にある「予定の通知音」で、落ち着いた標準音または自分の音声ファイルを選べます。")
+    story.extend([
+        data_table([
+            ("やわらぎ", "澄んだチャイム。初期設定"),
+            ("深い雫", "静かに響く低い音"),
+            ("小鈴", "控えめな鈴の音"),
+            ("朝露のピアノ", "やわらかな短いピアノ"),
+            ("木漏れ日のカリンバ", "穏やかな木の音色"),
+            ("音なし", "ポップアップだけを表示"),
+        ], styles, 47 * mm),
+        Spacer(1, 4 * mm),
+        step(1, "音を選んで試聴", "標準音または設定済みの自分の音を選び、「選択中の音を試聴」で確認します。もう一度押すと停止します。", styles),
+        step(2, "音量と再生秒数を調整", "音量は0～100%、通知で鳴らす長さは3～60秒で調整します。初期値は12秒です。試聴中は停止ボタンを押すまで再生します。", styles),
+        step(3, "自分の音源を使う", "「ファイルを選ぶ」から15MBまでのMP3、M4A、AAC、WAV、OGG、Opus、FLAC、MIDIを選びます。選択したファイルはdata/notification-soundsへコピーされます。", styles),
+        Spacer(1, 4 * mm),
+        two_cards([
+            ("MIDIの音色", "Koyomado内蔵の穏やかな音色で再生するため、元の楽器・音源とは異なる場合があります。"),
+            ("再生できない場合", "拡張子だけ変更したファイルは使用できません。一般音声はWindows WebView2の対応コーデックにも依存します。別形式へ変換して試してください。"),
+        ], styles, [PURPLE_PALE, ROSE_PALE]),
+        Spacer(1, 4 * mm),
+        card("標準音の利用条件", "同梱5音はCC0 1.0素材をもとにしています。出典とKoyomadoでの編集内容は、配布物のNOTIFICATION_SOUNDS_CC0.txtとTHIRD_PARTY_NOTICES.mdで確認できます。", styles, GREEN_PALE),
+        PageBreak(),
+    ])
+
+    # 13: data and update
     page_title(story, styles, "DATA AND UPDATE", "データ保存・持ち運び・更新", "予定と設定は暗号化せず、koyomado.exeと同じ場所のdataフォルダーへ保存します。Googleの更新トークンだけはWindows資格情報マネージャーへ保存します。")
     story.extend([
         data_table([
-            ("calendar-data.json", "予定、開始・終了日時、繰り返し、削除済み予定、外観、表示先、Google接続設定"),
+            ("calendar-data.json", "予定、日時、繰り返し、リマインダー、削除済み予定、外観、通知音、Google接続設定"),
             ("calendar-data.backup.json", "予定データを更新する直前のバックアップ"),
-            ("calendar-data.v1/v2.backup.json", "旧形式からversion 3へ移行する前の予定データ（移行時のみ）"),
+            ("calendar-data.v1～v4.backup.json", "旧形式からversion 5へ移行する前の予定データ（移行時のみ）"),
+            ("notification-sounds", "自分で設定した通知音。dataフォルダーと一緒に持ち運びます"),
             ("window-state.json", "モニター構成ごとのウィンドウ位置とサイズ"),
             ("window-state.backup.json", "位置情報を更新する直前のバックアップ"),
             ("window-state.v1.backup.json", "旧形式から移行する前の位置情報（移行時のみ）"),
@@ -556,7 +845,7 @@ def build_story(styles: dict[str, ParagraphStyle]) -> list:
         Spacer(1, 4 * mm),
         p("同期する内容", styles["h2"]),
         data_table([
-            ("予定", "予定名、開始・終了日時、終日、場所、メモ、繰り返し、削除"),
+            ("予定", "予定名、開始・終了日時、終日、場所、メモ、繰り返し、リマインダー、削除"),
             ("複数日", "終日の連休・出張、日をまたぐ時刻付き予定を維持"),
             ("同期先", "ローカルのみ、特定アカウント、接続中の全アカウントから予定ごとに選択"),
             ("アカウント", "最大3件。各アカウントで同期するカレンダーを1つ選択"),
@@ -568,64 +857,203 @@ def build_story(styles: dict[str, ParagraphStyle]) -> list:
         bullet("OAuthクライアントID、クライアントシークレット、プロジェクトIDはcalendar-data.jsonへ保存します。", styles),
         bullet("Googleの更新トークンはWindows資格情報マネージャーへ保存し、ポータブルフォルダーやGoogle Driveには入れません。", styles),
         card("通信を止める", "歯車でGoogleカレンダー連携をOFFにすると自動同期を停止します。アカウントの「接続解除」では認証情報と同期リンクを削除し、取り込み済み予定はローカル予定として残します。", styles, PURPLE_PALE),
+        Spacer(1, 3 * mm),
+        p("最初の接続は、この7段階", styles["h2"]),
+        roadmap([
+            (1, "専用プロジェクト", "Koyomado用を選ぶ"),
+            (2, "Calendar API", "有効化を確認"),
+            (3, "Branding", "アプリ名とメール"),
+            (4, "対象", "Externalと連絡先"),
+            (5, "Desktop client", "JSONをダウンロード"),
+            (6, "本番環境", "アプリを公開"),
+            (7, "Koyomado", "JSON読込と接続"),
+        ], styles),
         PageBreak(),
     ])
 
-    # 13: Google Cloud project and API
+    # 13: personal-use production policy
+    page_title(story, styles, "GOOGLE BEFORE START", "常用設定は「In production」一本です", "利用者自身のOAuthプロジェクトを個人利用として本番環境へ切り替えます。公開サイトの準備やGoogleへの検証申請は行いません。")
+    story.extend([
+        data_table([
+            ("採用する設定", "Google Auth Platformの「対象」で「アプリを公開」を押し、公開ステータスを「In production」にします。"),
+            ("採用しない設定", "Testingは動作確認用です。Calendar権限を使う外部アプリでは更新トークンが原則7日で期限切れになるため、常用しません。"),
+        ], styles, 34 * mm),
+        Spacer(1, 4 * mm),
+        card("個人利用なら検証申請は不要です", "利用者が自分のGoogle Cloudプロジェクトを作り、自分や身近な少人数だけで使う場合は、OAuth検証を申請せずにIn productionへ切り替えられます。ホームページ、プライバシーポリシー、承認済みドメイン、Y-TECのURLは入力しません。", styles, GREEN_PALE),
+        Spacer(1, 4 * mm),
+        two_cards([
+            ("初回の警告", "未確認アプリの警告が出る場合があります。自分で作成したプロジェクト名と要求権限を確認したときだけ詳細から続行します。"),
+            ("100ユーザー上限", "未検証プロジェクトには生涯100新規ユーザーの上限があります。利用者ごとに自分のプロジェクトを作り、最大3アカウントを接続する本方式では通常影響しません。"),
+        ], styles, [SAND_PALE, SKY_PALE]),
+        Spacer(1, 4 * mm),
+        url_link("Google公式 - 公開ステータスとTestingの期限", GOOGLE_AUDIENCE_HELP_URL, styles),
+        url_link("Google公式 - 個人利用で検証が不要な場合", GOOGLE_VERIFICATION_HELP_URL, styles),
+        PageBreak(),
+    ])
+
+    # 14: Google Cloud project and API
     page_title(story, styles, "GOOGLE CLOUD 1", "プロジェクト作成とCalendar API", "以下は2026年8月時点のGoogle Cloud画面名です。表示名が変わった場合は、近い名称の項目を選んでください。")
     story.extend([
         step(1, "Google Cloud Consoleを開く", f'<link href="{GOOGLE_CONSOLE_URL}" color="#5f5278">{GOOGLE_CONSOLE_URL}</link>へ、連携に使うGoogleアカウントでログインします。', styles),
-        step(2, "プロジェクトを作成", "上部のプロジェクト選択を開き、「新しいプロジェクト」を選びます。名前は例としてKoyomado Personalとし、作成後にそのプロジェクトへ切り替えます。", styles),
-        step(3, "APIライブラリを開く", "左上のメニューから「APIとサービス」-「ライブラリ」を開きます。新しいGoogle Auth Platform画面では「APIs」または検索欄から進める場合があります。", styles),
-        step(4, "Google Calendar APIを有効化", "Google Calendar APIを検索して選び、「有効にする」を押します。似た名前のCalDAV APIではありません。", styles),
-        Spacer(1, 4 * mm),
+        step(2, "プロジェクトを作成", "「新しいプロジェクト」を開き、名前をKoyomado Personalなどにします。プロジェクトIDは自動生成のままで構いません。作成後、画面上部でそのプロジェクトを選びます。", styles),
+        step(3, "Google Calendar APIを有効化", "APIライブラリでGoogle Calendar APIを開き、「有効にする」を押します。似た名前のCalDAV APIは選びません。", styles),
+        Spacer(1, 2 * mm),
+        url_link("プロジェクト作成", GOOGLE_PROJECT_CREATE_URL, styles),
+        url_link("Google Calendar API", GOOGLE_CALENDAR_API_URL, styles),
+        Spacer(1, 2.5 * mm),
+        screenshot_pair(
+            ("oauth/01-google-project-create.png", "図1  名前を入力して「作成」。画面上部に割り当て数の注意が出ても、作成できる残数があれば進められます。"),
+            ("oauth/02-enable-calendar-api.png", "図2  Google Calendar APIの画面で「有効にする」を押します。"),
+            styles,
+        ),
+        Spacer(1, 3 * mm),
         card("APIキーは作りません", "Koyomadoが使うのはAPIキーではなく、デスクトップアプリ用のOAuth 2.0クライアントです。利用者自身のプロジェクトを使うため、Y-TEC共通キーやY-TECへのAPI利用料はありません。Google Cloudの規約、割り当て、ほかに有効化したサービスの費用は利用者自身で管理してください。", styles, SAND_PALE),
-        Spacer(1, 4 * mm),
-        p("確認ポイント", styles["h2"]),
-        bullet("画面上部のプロジェクト名が、今作成したKoyomado用プロジェクトになっている。", styles),
-        bullet("Google Calendar APIの画面に「APIが有効です」または「管理」と表示される。", styles),
-        bullet("組織のGoogle Workspace管理者が外部アプリを制限している場合は、管理者の許可が必要になることがあります。", styles),
         PageBreak(),
     ])
 
-    # 14: Google OAuth consent
-    page_title(story, styles, "GOOGLE CLOUD 2", "同意画面・利用者・権限を設定", "Google Auth Platformで、誰が使うかとKoyomadoへ許可する範囲を設定します。")
+    # 15: Google Auth Platform start and app information
+    page_title(story, styles, "GOOGLE CLOUD 2", "Google Auth Platformを開始する", "Calendar APIを有効にしたプロジェクトで、OAuth同意画面の設定を始めます。")
     story.extend([
-        step(1, "Brandingを設定", "Google Auth Platformの「Branding」を開き、アプリ名にKoyomado、ユーザーサポートメールとデベロッパー連絡先に自分のメールアドレスを設定して保存します。", styles),
-        step(2, "Audienceを設定", "個人のGoogleアカウントを使う場合は通常「External」を選びます。Google Workspace組織内だけで使う場合は、管理者方針に応じてInternalを選べることがあります。", styles),
-        step(3, "テスト利用者を追加", "公開ステータスがTestingの間は「Test users」へ、Koyomadoと接続するGoogleアカウントを追加します。最大3アカウントを使う場合は3件とも追加します。", styles),
-        step(4, "Data Accessの権限を確認", "次の4つを使用します。画面でスコープ追加が求められる場合は、必要なものだけを選びます。", styles),
-        p("openid<br/>email<br/>https://www.googleapis.com/auth/calendar.events<br/>https://www.googleapis.com/auth/calendar.calendarlist.readonly", styles["code"]),
+        step(1, "Google Auth Platformの概要を開く", "正しいプロジェクトが選ばれていることを確認し、「開始」または「構成を開始」を押します。", styles),
+        step(2, "アプリ名を入力", "アプリ名はKoyomado。ユーザーサポートメールは自分のGoogleアカウントを選びます。", styles),
+        Spacer(1, 2 * mm),
+        url_link("Google Auth Platform 概要", GOOGLE_AUTH_OVERVIEW_URL, styles),
+        Spacer(1, 2.5 * mm),
+        screenshot_figure("oauth/03-auth-platform-start.png", "図3  OAuthクライアントがまだ無い状態。右側の「開始」から設定を始めます。", styles),
+        Spacer(1, 2.5 * mm),
+        screenshot_figure("oauth/04-oauth-app-info.png", "図4  アプリ名はKoyomado。メール欄は必ず自分のアカウントを選びます（説明書では非表示）。", styles),
+        PageBreak(),
+    ])
+
+    # 16: audience and contact information
+    page_title(story, styles, "GOOGLE CLOUD 3", "対象と連絡先を設定する", "個人のGoogleアカウントで使う場合は通常「外部」を選び、連絡先には自分のメールアドレスを設定します。")
+    story.extend([
+        step(1, "対象は「外部」", "個人のGoogleアカウントでは「外部（External）」を選びます。Workspace組織内だけで使う場合は、管理者方針に応じて「内部」を選べることがあります。", styles),
+        step(2, "連絡先情報", "GoogleからOAuth設定に関する通知を受け取る自分のメールアドレスを入力します。一般利用者へ公開する連絡先として扱われる場合があります。", styles),
+        Spacer(1, 2 * mm),
+        url_link("対象（Audience）", GOOGLE_AUTH_AUDIENCE_URL, styles),
+        Spacer(1, 2.5 * mm),
+        screenshot_figure("oauth/05-oauth-audience-external.png", "図5  個人利用は「外部」を選択して「次へ」。", styles),
+        Spacer(1, 2.5 * mm),
+        screenshot_figure("oauth/06-oauth-contact-email.png", "図6  デベロッパー連絡先へ自分のメールアドレスを入力（説明書では非表示）。", styles),
+        PageBreak(),
+    ])
+
+    # 17: policy and OAuth client form
+    page_title(story, styles, "GOOGLE CLOUD 4", "規約を確認し、Desktopクライアントを作る", "Koyomadoが必要とするのは「デスクトップ アプリ」用のOAuthクライアントです。APIキーやウェブアプリ用クライアントではありません。")
+    story.extend([
+        step(1, "API利用規約を確認", "表示されたGoogle APIサービスのユーザーデータポリシーを読み、同意できる場合だけチェックして作成します。", styles),
+        step(2, "「クライアント」を開く", "「OAuth クライアントを作成」を押し、アプリケーションの種類で「デスクトップ アプリ」を選びます。名前はKoyomado Desktopなどで構いません。", styles),
+        url_link("OAuthクライアント", GOOGLE_AUTH_CLIENTS_URL, styles),
+        Spacer(1, 2.5 * mm),
+        screenshot_figure("oauth/07-oauth-user-data-policy.png", "図7  規約を確認し、同意する場合だけチェックして「作成」。", styles),
+        Spacer(1, 2.5 * mm),
+        screenshot_figure("oauth/08-create-desktop-client.png", "図8  種類は必ず「デスクトップ アプリ」。名前は自分が判別しやすいもので構いません。", styles),
+        PageBreak(),
+    ])
+
+    # 18: JSON download and production preparation
+    page_title(story, styles, "GOOGLE CLOUD 5", "JSONを保存し、「対象」を開く", "OAuthクライアント作成後にJSONを保存します。次に公開ステータスを切り替えるため、Google Auth Platformの「対象」を開きます。")
+    story.extend([
+        step(1, "JSONをダウンロード", "作成完了ダイアログの「JSONをダウンロード」を押し、あとで分かる場所へ保存します。クライアントIDとクライアントシークレットは公開しません。", styles),
+        step(2, "「対象」を開く", "左メニューの「対象」を開きます。本手順ではブランディングのホームページ、プライバシーポリシー、承認済みドメインは設定しません。", styles),
+        Spacer(1, 2.5 * mm),
+        screenshot_figure("oauth/09-download-oauth-json.png", "図9  IDとシークレットは説明書では非表示。下部からJSONをダウンロードします。", styles),
         Spacer(1, 3 * mm),
         two_cards([
-            ("Testingの注意", "ExternalアプリをTestingのまま使うと、Googleの仕様により認証が約7日で期限切れになり、Koyomadoで再認証が必要になります。"),
-            ("In productionの注意", "個人用でも公開ステータスをIn productionへ変更できますが、Calendar権限では未確認アプリの警告や検証案内が表示される場合があります。画面の内容を読んで判断してください。"),
-        ], styles, [ROSE_PALE, SAND_PALE]),
+            ("正しいJSON", "client_secret_...jsonという名前のDesktop app用OAuth JSONです。"),
+            ("公開せずバックアップ", "完全なシークレットを含むJSONは作成時にだけ取得できます。GitHub、Web、メールへ載せず、安全な場所へバックアップします。紛失時はシークレットのローテーションが簡単です。"),
+        ], styles, [GREEN_PALE, ROSE_PALE]),
+        Spacer(1, 2.5 * mm),
+        url_link("対象（Audience）", GOOGLE_AUTH_AUDIENCE_URL, styles),
         PageBreak(),
     ])
 
-    # 15: OAuth client and Koyomado connection
-    page_title(story, styles, "GOOGLE CLOUD 3", "Desktopクライアントを作って接続", "OAuthクライアントJSONをダウンロードし、Koyomadoへ読み込みます。JSONは公開・共有しないでください。")
+    # 19: publish to production confirmation
+    page_title(story, styles, "GOOGLE CLOUD 6", "公開ステータスを本番環境へ変更する", "「対象」で公開ステータスをIn productionへ変更します。この切り替えはGoogleのOAuth検証申請とは別です。")
     story.extend([
-        step(1, "Clientsを開く", "Google Auth Platformの「Clients」から「Create Client」を選びます。旧画面では「APIとサービス」-「認証情報」-「認証情報を作成」-「OAuthクライアントID」です。", styles),
-        step(2, "Desktop appを選ぶ", "Application typeで「Desktop app」を選び、名前をKoyomado Desktopなどにして作成します。Web applicationは選びません。", styles),
-        step(3, "JSONをダウンロード", "作成したクライアントのダウンロードボタンからJSONを保存します。保存場所は後で分かる場所にします。", styles),
-        step(4, "Koyomadoへ読み込む", "Koyomadoの歯車でGoogleカレンダー連携をONにし、「JSONを選択」を押して先ほどのファイルを選びます。設定後は「JSONを読み直す」と表示されます。", styles),
-        step(5, "アカウントを接続", "「アカウントを接続」を押すと既定ブラウザーが開きます。Googleアカウントを選び、表示された権限を確認して許可します。Koyomadoへ戻るまでブラウザーを閉じないでください。", styles),
-        Spacer(1, 3 * mm),
-        screenshot("google-settings-v1.png", 132 * mm),
-        Spacer(1, 2 * mm),
-        p(f'<link href="{GOOGLE_CREDENTIALS_URL}" color="#5f5278">Google公式: デスクトップアプリの認証情報を作成</link>', styles["link"]),
+        step(1, "「対象」を開く", "公開ステータスが「テスト」と表示されていることを確認し、「アプリを公開」を押します。", styles),
+        screenshot_figure("oauth/11-publish-to-production.png", "図10  「アプリを公開」を押します。Koyomadoを常用する場合はTestingのままにしません。", styles),
+        Spacer(1, 2.5 * mm),
+        step(2, "確認内容を読む", "未確認アプリの警告や新規ユーザー数の上限に関する説明を読み、「確認」を押します。", styles),
+        screenshot_figure("oauth/12-confirm-production.png", "図11  内容を確認して「確認」。これはGoogleの検証申請そのものではありません。", styles),
         PageBreak(),
     ])
 
-    # 16: account and sync operation
-    page_title(story, styles, "GOOGLE SYNC", "アカウント・同期先・同期操作", "接続後に対象カレンダーを確認し、予定ごとの送信先を選びます。")
+    # 20: production complete
+    page_title(story, styles, "GOOGLE CLOUD 7", "「本番環境」になったことを確認する", "公開ステータスが本番環境へ変われば、Testing特有の7日間制限を避ける準備は完了です。")
+    story.extend([
+        screenshot_figure("oauth/13-production-complete.png", "図12  「公開ステータス: 本番環境」を確認します。", styles),
+        Spacer(1, 4 * mm),
+        two_cards([
+            ("未確認アプリ警告", "本番環境にしてもOAuth検証は行わないため、接続時に警告が出ることがあります。自分で作成したプロジェクトであることを確認します。"),
+            ("検証申請はしません", "このOAuthプロジェクトを使うのは作成者本人と接続する少数のアカウントだけです。Koyomadoの標準手順ではGoogleへの検証申請を行いません。"),
+        ], styles, [SAND_PALE, SKY_PALE]),
+        Spacer(1, 4 * mm),
+        url_link("公開ステータス", GOOGLE_AUTH_AUDIENCE_URL, styles),
+        url_link("検証が必要か確認", GOOGLE_VERIFICATION_HELP_URL, styles),
+        card("ここからKoyomadoへ戻ります", "ダウンロードしたOAuth JSONをKoyomadoへ読み込みます。JSONは公開・共有せず、自分のPCでだけ使用してください。", styles, GREEN_PALE),
+        PageBreak(),
+    ])
+
+    # 21: Koyomado JSON loading
+    page_title(story, styles, "KOYOMADO CONNECT 1", "KoyomadoへJSONを読み込む", "Google CloudからダウンロードしたDesktop app用JSONを、Koyomadoの設定画面へ読み込みます。")
+    story.extend([
+        compact_steps([
+            (1, "歯車を開く", "「表示と起動の設定」を開きます。"),
+            (2, "Google連携をON", "ONにしたときだけGoogle連携設定が表示されます。"),
+            (3, "JSONを選択", "ダウンロードしたclient_secret_...jsonを選びます。"),
+            (4, "読込完了を確認", "ボタンが「JSONを読み直す」へ変わり、「OAuthクライアント設定を読み込みました」と表示されれば成功です。"),
+        ], CONTENT_W, styles),
+        Spacer(1, 3 * mm),
+        screenshot_pair(
+            ("oauth/14-koyomado-json-select.png", "図13  Googleカレンダー連携をONにして「JSONを選択」。"),
+            ("oauth/15-koyomado-json-loaded.png", "図14  読込後は「JSONを読み直す」に変わります。"),
+            styles,
+        ),
+        Spacer(1, 4 * mm),
+        two_cards([
+            ("JSONを読めない", "Desktop app用JSONか確認します。APIキー、サービスアカウント、Web application用JSONは使用できません。"),
+            ("JSONの保管", "クライアントシークレットを含むため、GitHub、Webサイト、問い合わせメール、公開スクリーンショットへ載せないでください。"),
+        ], styles, [SAND_PALE, ROSE_PALE]),
+        PageBreak(),
+    ])
+
+    # 22: browser authorization and connection result
+    page_title(story, styles, "KOYOMADO CONNECT 2", "ブラウザーで許可し、接続完了を確認する", "Koyomadoの「アカウントを接続」を押すと既定ブラウザーが開きます。認証が終わるまでKoyomadoを閉じないでください。")
+    story.extend([
+        roadmap([
+            (1, "アカウント選択", "接続するGoogleアカウント"),
+            (2, "未確認警告", "自分のプロジェクトか確認"),
+            (3, "次へ", "メールアドレスの利用を確認"),
+            (4, "すべて選択", "一覧参照と予定編集"),
+            (5, "続行", "Koyomadoへ戻る"),
+            (6, "接続結果", "Koyomadoで1/3件を確認"),
+            (7, "カレンダー", "同期先を1つ選択"),
+            (8, "既定保存先", "普段使うアカウントを選択"),
+        ], styles),
+        Spacer(1, 3 * mm),
+        card("未確認アプリの警告が出たら", "自分で作成したGoogle Cloudプロジェクト名、選択したGoogleアカウント、要求権限がこの説明書と一致する場合だけ「詳細」-「Koyomado（安全ではないページ）に移動」へ進みます。心当たりのないクライアントでは中止してください。", styles, SAND_PALE),
+        Spacer(1, 3 * mm),
+        data_table([
+            ("許可する権限1", "登録しているGoogleカレンダー一覧の参照"),
+            ("許可する権限2", "すべてのカレンダーの予定の表示と編集"),
+            ("成功画面", "ブラウザーに「Koyomadoと接続しました」と表示"),
+            ("Koyomado側", "接続アカウントが1/3件になり、同期するカレンダーと既定の保存先を選択可能"),
+        ], styles, 42 * mm),
+        Spacer(1, 3 * mm),
+        card("3分以内に完了してください", "Koyomadoのローカル認証待受には3分の制限があります。時間切れになった場合は、Koyomadoへ戻って「アカウントを接続」を押し、最初から認証し直してください。ブラウザーの成功表示だけでなく、Koyomadoのアカウント件数まで確認します。", styles, ROSE_PALE),
+        PageBreak(),
+    ])
+
+    # 23: account and sync operation
+    page_title(story, styles, "GOOGLE SYNC", "アカウント・同期先・同期操作", "接続後に対象カレンダーを確認し、新規予定の既定値と予定ごとの送信先を選びます。")
     story.extend([
         step(1, "同期するカレンダーを選ぶ", "接続直後にアカウントの「同期するカレンダー」を選びます。最初の同期後は誤結合を防ぐため選択をロックします。変更するときは接続解除後に接続し直します。", styles),
         step(2, "アカウントの同期をON", "アカウントカードの「このアカウントと同期」をONにします。不要なアカウントだけ一時停止できます。", styles),
-        step(3, "予定の保存先を選ぶ", "予定追加・編集画面で、ローカルのみ、特定アカウント、または「すべて選択」を選びます。Googleから取得した予定は元アカウントへの同期を解除できません。", styles),
-        step(4, "初回同期を確認", "設定画面の「今すぐ同期」を押し、最終同期日時とエラー表示を確認します。合成のテスト予定を双方で1件ずつ作り、往復することを確かめてから実予定に使うと安全です。", styles),
+        step(3, "新規予定の既定保存先を決める", "設定画面の「新しい予定の既定の保存先」で、いつも使う1件、複数件、または「すべて選択」を指定します。何も選ばなければローカルのみです。", styles),
+        step(4, "予定ごとに保存先を確認", "予定追加・編集画面では既定値が自動選択されます。その予定だけ解除・追加できます。Googleから取得した予定は元アカウントへの同期を解除できません。", styles),
+        step(5, "初回同期を確認", "設定画面の「今すぐ同期」を押し、最終同期日時とエラー表示を確認します。必要なら「Koyomado接続テスト」など明確なテスト予定を1件だけ作り、往復確認後にKoyomadoとGoogleの両方から削除します。", styles),
         Spacer(1, 4 * mm),
         p("自動同期のタイミング", styles["h2"]),
         data_table([
@@ -635,11 +1063,11 @@ def build_story(styles: dict[str, ParagraphStyle]) -> list:
             ("手動", "上部の同期ボタン、または設定の「今すぐ同期」"),
         ], styles, 43 * mm),
         Spacer(1, 4 * mm),
-        card("別のPCへ移した場合", "予定とGoogle接続設定はフォルダーと一緒に移動しますが、更新トークンは移動しません。移動先で「再認証」を押し、各アカウントを認証し直してください。同じGoogle Driveフォルダーを複数PCで同時起動しないでください。", styles, SKY_PALE),
+        card("自宅PCと会社PCで使う場合", "各PCへ別々のKoyomadoフォルダーを置き、それぞれで同じGoogleアカウントへ接続する方法が安全です。Googleカレンダーを共通の同期元として使います。同じGoogle Drive上のKoyomadoフォルダーを2台から同時起動するとcalendar-data.jsonが競合するため避けてください。更新トークンはPCごとのWindows資格情報へ保存されるので、各PCで再認証します。", styles, SKY_PALE),
         PageBreak(),
     ])
 
-    # 17: Google conflicts and troubleshooting
+    # 24: Google conflicts and troubleshooting
     page_title(story, styles, "GOOGLE TROUBLE", "競合・解除・接続トラブル", "同期で勝手に予定を消さないため、両側編集を検出したときは内容を2件に分けて残します。")
     story.extend([
         two_cards([
@@ -648,9 +1076,10 @@ def build_story(styles: dict[str, ParagraphStyle]) -> list:
         ], styles, [ROSE_PALE, GREEN_PALE]),
         Spacer(1, 4 * mm),
         data_table([
-            ("7日ほどで再認証", "OAuth公開ステータスがTestingの可能性。Audienceと公開ステータスを確認"),
+            ("7日ほどで再認証", "公開ステータスがTestingの可能性。「対象」でIn productionへ切り替え、Koyomadoで一度接続解除して認証し直す"),
             ("未確認アプリの警告", "自分で作成したプロジェクト名・Googleアカウント・要求権限を確認。心当たりがなければ中止"),
             ("JSONを読めない", "Desktop app用JSONか確認。APIキーのJSONやWeb application用は使用不可"),
+            ("JSONを紛失した", "Google Auth Platformでクライアントシークレットをローテーションし、新しいJSONをダウンロード。できない場合はDesktopクライアントを作り直します"),
             ("ブラウザー後に戻らない", "Koyomadoを開いたまま再試行。ファイアウォールやセキュリティ製品のlocalhost通信も確認"),
             ("カレンダーを変えたい", "いったん接続解除し、再接続直後に対象カレンダーを選び直す"),
             ("予定が同期されない", "Google連携、アカウント同期、予定の同期先を確認して「今すぐ同期」"),
@@ -662,7 +1091,7 @@ def build_story(styles: dict[str, ParagraphStyle]) -> list:
         PageBreak(),
     ])
 
-    # 18: trouble and reference
+    # 25: trouble and reference
     page_title(story, styles, "HELP", "困ったとき・早見表", "画面に予定が見えない場合は、まず月、日付、タスクバーまたはトレイ、dataフォルダーの順に確認してください。")
     story.extend([
         data_table([
@@ -671,6 +1100,7 @@ def build_story(styles: dict[str, ParagraphStyle]) -> list:
             ("記念日が翌年に出ない", "繰り返し周期が「毎年」か確認。2月29日はうるう年だけ表示されます。"),
             ("終了日時が戻った", "開始時刻を変えると終了は1時間後へ再設定されます。開始を決めた後に終了日時を変更します。"),
             ("貼り付けが選べない", "先に予定を右クリックして「内容をコピー」を選びます。"),
+            ("通知が出ない", "Koyomadoが起動中か、予定の通知時刻、音なし設定、音量を確認。スリープ中や終了中の通知は後からまとめて表示しません。"),
             ("起動時の位置がおかしい", "現在のモニター構成で最後に保存した位置へ戻ります。初めての構成や画面外の位置は自動で見える位置へ戻るため、希望の場所へ移動して終了し直してください。"),
             ("データが壊れた", "バックアップから自動復旧を試み、壊れたファイルはcorrupt付きの名前で退避します。直らない場合はdataのバックアップを戻します。"),
         ], styles, 46 * mm),

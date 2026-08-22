@@ -5,7 +5,8 @@ Koyomadoは、次のオープンソースソフトウェアとフォントを利
 ## 実行時の主な依存関係
 
 - React / React DOM — MIT License
-- Tauri / Tauri API / Tauri Autostart Plugin — Apache-2.0 OR MIT License
+- Tauri / Tauri API — Apache-2.0 OR MIT License
+- auto-launch — MIT License
 - rrule — BSD 3-Clause License
 - holiday-japanese — Copyright 2024 GAHOJIN, Inc., Apache License 2.0
 - chrono — MIT OR Apache-2.0 License
@@ -15,6 +16,16 @@ Koyomadoは、次のオープンソースソフトウェアとフォントを利
 - url — MIT OR Apache-2.0 License
 - windows-sys — MIT OR Apache-2.0 License
 - LINE Seed JP — Copyright LY Corporation, SIL Open Font License 1.1
+
+## 同梱通知音
+
+次の標準通知音はCC0 1.0（パブリックドメイン提供）素材です。Koyomadoでは一部を音量調整・約10.5秒への切り出し・フェード処理しています。
+
+- 「やわらぎ」「深い雫」「小鈴」— Robin Lamb, [UI Sound Effects](https://opengameart.org/content/ui-sound-effects-button-clicks-user-feedback-notifications)
+- 「朝露のピアノ」— jestar, [A Simple Trifle](https://opengameart.org/content/a-simple-trifle)
+- 「木漏れ日のカリンバ」— extenz, [Short kalimba loop](https://opengameart.org/content/short-kalimba-loop)
+
+出典と編集内容の詳細は `third_party/opengameart-cc0-notification-sounds/NOTICE.txt` に記録しています。
 
 ## 開発時の主な依存関係
 

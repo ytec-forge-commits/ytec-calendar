@@ -29,6 +29,7 @@ try {
     Copy-Item -LiteralPath (Join-Path $projectRoot "NOTICE") -Destination (Join-Path $stagingPath "NOTICE")
     Copy-Item -LiteralPath (Join-Path $projectRoot "CHANGELOG.md") -Destination (Join-Path $stagingPath "CHANGELOG.md")
     Copy-Item -LiteralPath (Join-Path $projectRoot "THIRD_PARTY_NOTICES.md") -Destination (Join-Path $stagingPath "THIRD_PARTY_NOTICES.md")
+    Copy-Item -LiteralPath (Join-Path $projectRoot "third_party\opengameart-cc0-notification-sounds\NOTICE.txt") -Destination (Join-Path $stagingPath "NOTIFICATION_SOUNDS_CC0.txt")
     Copy-Item -LiteralPath (Join-Path $projectRoot "PRIVACY.md") -Destination (Join-Path $stagingPath "PRIVACY.md")
     Copy-Item -LiteralPath (Join-Path $projectRoot "CODE_SIGNING_POLICY.md") -Destination (Join-Path $stagingPath "CODE_SIGNING_POLICY.md")
     Copy-Item -LiteralPath (Join-Path $projectRoot "src\assets\fonts\OFL.txt") -Destination (Join-Path $stagingPath "LINE_Seed_JP_OFL.txt")
@@ -64,7 +65,7 @@ try {
         "プライバシー: PRIVACY.md"
         "コード署名方針: CODE_SIGNING_POLICY.md"
         "更新履歴: CHANGELOG.md"
-        "第三者ライセンス: THIRD_PARTY_NOTICES.md / LINE_Seed_JP_OFL.txt"
+        "第三者ライセンス: THIRD_PARTY_NOTICES.md / LINE_Seed_JP_OFL.txt / NOTIFICATION_SOUNDS_CC0.txt"
     ) | Set-Content -LiteralPath (Join-Path $stagingPath "はじめに.txt") -Encoding UTF8
 
     if (Test-Path -LiteralPath $archivePath) {
