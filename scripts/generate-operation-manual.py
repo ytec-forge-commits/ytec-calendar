@@ -336,7 +336,7 @@ def build_story(styles: dict[str, ParagraphStyle]) -> list:
         card("標準はタスクバーだけに表示", "初期設定では通常のWindowsアプリと同じく、最小化するとタスクバーへ残り、右上の×で終了します。歯車から「タスクトレイのみ」または「両方」へ変更できます。", styles, GREEN_PALE),
         Spacer(1, 4 * mm),
         p("Windowsの警告について", styles["h2"]),
-        p("v1.0.0-rc.1はコード署名前のベータ版です。SmartScreenなどの警告は、危険と確定したという意味ではなく、発行元を署名で確認できない場合にも表示されます。公式ページ掲載のSHA-256とダウンロードしたZIPの値を照合し、入手元を確認してください。", styles["body"]),
+        p(f"v{VERSION}はコード署名前のベータ版です。SmartScreenなどの警告は、危険と確定したという意味ではなく、発行元を署名で確認できない場合にも表示されます。公式ページ掲載のSHA-256とダウンロードしたZIPの値を照合し、入手元を確認してください。", styles["body"]),
         p("PowerShellで確認する場合", styles["h3"]),
         p(f"Get-FileHash .\\koyomado-v{VERSION}-windows-portable.zip -Algorithm SHA256", styles["code"]),
         PageBreak(),
