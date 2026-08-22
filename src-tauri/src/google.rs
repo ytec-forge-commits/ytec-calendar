@@ -1,8 +1,9 @@
 use crate::credentials;
 use chrono::{Datelike, Utc};
 use oauth2::{
-    basic::BasicClient, reqwest::http_client, AuthUrl, AuthorizationCode, ClientId, ClientSecret,
-    CsrfToken, PkceCodeChallenge, RedirectUrl, RefreshToken, Scope, TokenResponse, TokenUrl,
+    basic::BasicClient, AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken,
+    EndpointNotSet, EndpointSet, PkceCodeChallenge, RedirectUrl, RefreshToken, Scope,
+    TokenResponse, TokenUrl,
 };
 use reqwest::blocking::Client;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -194,25 +195,31 @@ enum EventsPageError {
     Other(String),
 }
 
+type GoogleOauthClient =
+    BasicClient<EndpointSet, EndpointNotSet, EndpointNotSet, EndpointNotSet, EndpointSet>;
+
 fn oauth_client(
     config: &GoogleOAuthClient,
     redirect_url: Option<String>,
-) -> Result<BasicClient, String> {
+) -> Result<GoogleOauthClient, String> {
     if config.client_id.trim().is_empty() {
         return Err("OAuthクライアントIDが空です".into());
     }
     let client_secret = (!config.client_secret.trim().is_empty())
         .then(|| ClientSecret::new(config.client_secret.clone()));
-    let client = BasicClient::new(
-        ClientId::new(config.client_id.clone()),
-        client_secret,
-        AuthUrl::new(GOOGLE_AUTH_URL.into())
-            .map_err(|error| format!("Google認証URLを準備できません: {error}"))?,
-        Some(
+    let client = BasicClient::new(ClientId::new(config.client_id.clone()))
+        .set_auth_uri(
+            AuthUrl::new(GOOGLE_AUTH_URL.into())
+                .map_err(|error| format!("Google認証URLを準備できません: {error}"))?,
+        )
+        .set_token_uri(
             TokenUrl::new(GOOGLE_TOKEN_URL.into())
                 .map_err(|error| format!("GoogleトークンURLを準備できません: {error}"))?,
-        ),
-    );
+        );
+    let client = match client_secret {
+        Some(secret) => client.set_client_secret(secret),
+        None => client,
+    };
     match redirect_url {
         Some(redirect) => RedirectUrl::new(redirect)
             .map(|url| client.set_redirect_uri(url))
@@ -318,6 +325,7 @@ fn wait_for_authorization(listener: TcpListener, expected_state: &str) -> Result
 
 fn api_client() -> Result<Client, String> {
     Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
         .timeout(Duration::from_secs(30))
         .user_agent("Koyomado/1.0")
         .build()
@@ -388,9 +396,10 @@ fn refresh_access_token(config: &GoogleOAuthClient, account_id: &str) -> Result<
     let refresh_token = credentials::read_refresh_token(account_id)?
         .ok_or_else(|| "このPCにはGoogleの認証情報がありません。再認証してください".to_string())?;
     let client = oauth_client(config, None)?;
+    let http_client = api_client()?;
     let token = client
         .exchange_refresh_token(&RefreshToken::new(refresh_token))
-        .request(http_client)
+        .request(&http_client)
         .map_err(|error| format!("Googleの認証を更新できません: {error}"))?;
     Ok(token.access_token().secret().to_string())
 }
@@ -1528,7 +1537,7 @@ fn connect_account_blocking(config: GoogleOAuthClient) -> Result<GoogleConnectio
     let token = client
         .exchange_code(AuthorizationCode::new(code))
         .set_pkce_verifier(verifier)
-        .request(http_client)
+        .request(&api_client()?)
         .map_err(|error| format!("Googleの認証コードを交換できません: {error}"))?;
     let refresh_token = token.refresh_token().ok_or_else(|| {
         "Googleから更新トークンを受け取れませんでした。接続を解除して再度お試しください".to_string()
