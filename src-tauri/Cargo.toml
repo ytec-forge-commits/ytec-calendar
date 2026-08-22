@@ -1,6 +1,6 @@
 [package]
 name = "koyomado"
-version = "0.1.8"
+version = "1.0.0-rc.1"
 description = "持ち運べるWindows用カレンダー"
 authors = ["Y-TEC"]
 license = "Apache-2.0"
