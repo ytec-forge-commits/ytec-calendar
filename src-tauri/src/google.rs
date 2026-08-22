@@ -1018,12 +1018,12 @@ fn handle_remote_cancellation(
             {
                 match master.recurrence.as_mut() {
                     Some(EventRecurrence::Simple { excluded_dates, .. })
-                    | Some(EventRecurrence::Google { excluded_dates, .. }) => {
-                        if !excluded_dates.contains(&exception.original_date) {
-                            excluded_dates.push(exception.original_date.clone());
-                        }
+                    | Some(EventRecurrence::Google { excluded_dates, .. })
+                        if !excluded_dates.contains(&exception.original_date) =>
+                    {
+                        excluded_dates.push(exception.original_date.clone());
                     }
-                    None => {}
+                    Some(_) | None => {}
                 }
             }
         }
@@ -1091,12 +1091,12 @@ fn handle_remote_cancellation(
             if let Some(master) = data.events.iter_mut().find(|event| event.id == master_id) {
                 match master.recurrence.as_mut() {
                     Some(EventRecurrence::Simple { excluded_dates, .. })
-                    | Some(EventRecurrence::Google { excluded_dates, .. }) => {
-                        if !excluded_dates.contains(&original_date) {
-                            excluded_dates.push(original_date);
-                        }
+                    | Some(EventRecurrence::Google { excluded_dates, .. })
+                        if !excluded_dates.contains(&original_date) =>
+                    {
+                        excluded_dates.push(original_date);
                     }
-                    None => {}
+                    Some(_) | None => {}
                 }
             }
         }
