@@ -1,8 +1,11 @@
 [package]
 name = "koyomado"
-version = "0.1.8"
+version = "1.0.0-rc.1"
 description = "持ち運べるWindows用カレンダー"
 authors = ["Y-TEC"]
+license = "Apache-2.0"
+repository = "https://github.com/ytec-commits/ytec-calendar"
+homepage = "https://ytec.cloudfree.jp/ytb/koyomado/"
 edition = "2021"
 rust-version = "1.77.2"
 
@@ -14,7 +17,12 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2.6.0", features = [] }
 
 [dependencies]
+chrono = { version = "0.4.41", default-features = false, features = ["clock", "std"] }
+oauth2 = "4.4.2"
+reqwest = { version = "0.11.27", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tauri = { version = "2.11.0", features = ["tray-icon"] }
 tauri-plugin-autostart = "2.5.1"
+url = "2.5.4"
+windows-sys = { version = "0.59.0", features = ["Win32_Foundation", "Win32_Security_Credentials", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
