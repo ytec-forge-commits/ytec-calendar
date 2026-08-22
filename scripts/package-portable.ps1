@@ -1,4 +1,4 @@
-param(
+﻿param(
     [switch]$SkipBuild
 )
 
@@ -39,6 +39,7 @@ try {
         "アプリの更新や移動をするときも、このフォルダーを実行ファイルと一緒に残してください。"
     ) | Set-Content -LiteralPath (Join-Path $stagingPath "data\ここにデータが保存されます.txt") -Encoding UTF8
 
+    Import-Module Microsoft.PowerShell.Security -ErrorAction Stop
     $signature = Get-AuthenticodeSignature -LiteralPath $executablePath
     $signatureNote = if ($signature.Status -eq "Valid") {
         "6. この実行ファイルはコード署名済みです。署名者とSHA-256を公式ページで確認してください。"
