@@ -104,21 +104,18 @@ struct GoogleEventLink {
     original_start: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(
     tag = "kind",
     rename_all = "camelCase",
     rename_all_fields = "camelCase"
 )]
 enum EventOrigin {
+    #[default]
     Local,
-    Google { account_id: String },
-}
-
-impl Default for EventOrigin {
-    fn default() -> Self {
-        Self::Local
-    }
+    Google {
+        account_id: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
