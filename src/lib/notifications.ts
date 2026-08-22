@@ -5,12 +5,21 @@ import gentlePianoUrl from "../assets/sounds/gentle-piano.ogg";
 import quietKalimbaUrl from "../assets/sounds/quiet-kalimba.ogg";
 import { addDays, eventsForDate, toDateKey } from "./calendar";
 import { loadCustomNotificationSound } from "./store";
-import type { CalendarEvent, NotificationSettings, NotificationSoundId } from "../types";
+import type { CalendarEvent, EventReminders, NotificationSettings, NotificationSoundId } from "../types";
 
 export const MAX_REMINDER_MINUTES = 40_320;
 export const MAX_REMINDERS = 5;
 export const REMINDER_GRACE_MS = 2 * 60_000;
 export const NOTIFICATION_SOUND_AUTO_STOP_MS = 12_000;
+export const REMINDER_PRESETS = [
+  { minutes: 10, label: "10分前" },
+  { minutes: 30, label: "30分前" },
+  { minutes: 60, label: "1時間前" },
+  { minutes: 180, label: "3時間前" },
+  { minutes: 360, label: "6時間前" },
+  { minutes: 720, label: "12時間前" },
+  { minutes: 1_440, label: "1日前" },
+] as const;
 export type ReminderUnit = "minutes" | "hours" | "days";
 const REMINDER_UNIT_FACTORS: Record<ReminderUnit, number> = {
   minutes: 1,
@@ -116,6 +125,23 @@ export function reminderMinutesFromInput(amount: number, unit: ReminderUnit): nu
 
 export function maxReminderInputAmount(unit: ReminderUnit): number {
   return Math.floor(MAX_REMINDER_MINUTES / REMINDER_UNIT_FACTORS[unit]);
+}
+
+export function withEditedPopupReminders(reminders: EventReminders, popupMinutes: number[]): EventReminders {
+  return {
+    ...reminders,
+    useGoogleDefault: false,
+    popupMinutes,
+  };
+}
+
+export function togglePopupReminderPreset(reminders: EventReminders, minutes: number): EventReminders {
+  const selected = reminders.popupMinutes.includes(minutes);
+  if (!selected && reminders.popupMinutes.length + reminders.emailMinutes.length >= MAX_REMINDERS) return reminders;
+  const popupMinutes = selected
+    ? reminders.popupMinutes.filter((currentMinutes) => currentMinutes !== minutes)
+    : [...reminders.popupMinutes, minutes].sort((left, right) => left - right);
+  return withEditedPopupReminders(reminders, popupMinutes);
 }
 
 export interface NotificationPlayback {

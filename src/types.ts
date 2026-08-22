@@ -220,7 +220,7 @@ export function createEmptyEvent(id: string, date: string, timestamp: string, sy
     location: "",
     notes: "",
     reminders: {
-      useGoogleDefault: true,
+      useGoogleDefault: false,
       popupMinutes: [],
       emailMinutes: [],
     },

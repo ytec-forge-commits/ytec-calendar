@@ -8,6 +8,11 @@ describe("保存形式", () => {
     expect(DATA_VERSION).toBe(5);
   });
 
+  it("新しい予定はKoyomadoとGoogleで同じ通知設定を使う", () => {
+    const event = createEmptyEvent("new-reminder", "2026-09-01", "2026-08-23T00:00:00Z");
+    expect(event.reminders).toEqual({ useGoogleDefault: false, popupMinutes: [], emailMinutes: [] });
+  });
+
   it("終了日がない旧予定は開始日と同じ日へ補完する", () => {
     const legacyEvent = createEmptyEvent("legacy", "2026-09-01", "2026-08-22T00:00:00Z") as Partial<ReturnType<typeof createEmptyEvent>>;
     delete legacyEvent.endDate;

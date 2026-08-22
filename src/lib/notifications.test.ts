@@ -4,10 +4,13 @@ import {
   maxReminderInputAmount,
   NOTIFICATION_SOUND_AUTO_STOP_MS,
   parseMidi,
+  REMINDER_PRESETS,
   reminderInputParts,
   reminderLabel,
   reminderMinutesFromInput,
   scheduleNotificationPlaybackStop,
+  togglePopupReminderPreset,
+  withEditedPopupReminders,
 } from "./notifications";
 import { createEmptyEvent } from "../types";
 
@@ -65,6 +68,44 @@ describe("予定通知", () => {
     expect(maxReminderInputAmount("minutes")).toBe(40_320);
     expect(maxReminderInputAmount("hours")).toBe(672);
     expect(maxReminderInputAmount("days")).toBe(28);
+  });
+
+  it("Koyomadoの通知を編集したらGoogle側も同じ通知を使う", () => {
+    const event = createEmptyEvent("reminder-mode", "2026-09-01", "2026-08-23T00:00:00Z");
+    event.reminders.useGoogleDefault = true;
+    expect(event.reminders.useGoogleDefault).toBe(true);
+
+    const reminders = withEditedPopupReminders(event.reminders, [1_440, 360, 30]);
+
+    expect(reminders).toEqual({
+      useGoogleDefault: false,
+      popupMinutes: [1_440, 360, 30],
+      emailMinutes: [],
+    });
+  });
+
+  it("よく使う7種類をクリックだけで複数選択・解除できる", () => {
+    expect(REMINDER_PRESETS.map((preset) => preset.label)).toEqual([
+      "10分前", "30分前", "1時間前", "3時間前", "6時間前", "12時間前", "1日前",
+    ]);
+    const event = createEmptyEvent("preset-reminder", "2026-09-01", "2026-08-23T00:00:00Z");
+    event.reminders.useGoogleDefault = true;
+
+    const withThirtyMinutes = togglePopupReminderPreset(event.reminders, 30);
+    const withTwoPresets = togglePopupReminderPreset(withThirtyMinutes, 360);
+    const withoutThirtyMinutes = togglePopupReminderPreset(withTwoPresets, 30);
+
+    expect(withTwoPresets).toEqual({ useGoogleDefault: false, popupMinutes: [30, 360], emailMinutes: [] });
+    expect(withoutThirtyMinutes).toEqual({ useGoogleDefault: false, popupMinutes: [360], emailMinutes: [] });
+  });
+
+  it("通知が5件ある場合は未選択プリセットを追加せず、選択済みは解除できる", () => {
+    const event = createEmptyEvent("full-reminder", "2026-09-01", "2026-08-23T00:00:00Z");
+    event.reminders.popupMinutes = [10, 30, 60];
+    event.reminders.emailMinutes = [120, 240];
+
+    expect(togglePopupReminderPreset(event.reminders, 360)).toBe(event.reminders);
+    expect(togglePopupReminderPreset(event.reminders, 30).popupMinutes).toEqual([10, 60]);
   });
 
   it("通知音を12秒後に自動停止し、キャンセル時は停止しない", () => {

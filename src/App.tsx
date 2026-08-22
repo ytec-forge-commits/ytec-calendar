@@ -31,10 +31,13 @@ import {
   MAX_REMINDERS,
   maxReminderInputAmount,
   playNotificationSound,
+  REMINDER_PRESETS,
   reminderInputParts,
   reminderLabel,
   reminderMinutesFromInput,
   scheduleNotificationPlaybackStop,
+  togglePopupReminderPreset,
+  withEditedPopupReminders,
   type DueNotification,
   type NotificationPlayback,
   type ReminderUnit,
@@ -1119,10 +1122,10 @@ function EventEditor({ date, event, copiedContent, googleAccounts, defaultSyncTa
     const value = Math.max(0, Math.min(MAX_REMINDER_MINUTES, Math.round(minutes) || 0));
     setDraft((current) => ({
       ...current,
-      reminders: {
-        ...current.reminders,
-        popupMinutes: current.reminders.popupMinutes.map((currentMinutes, currentIndex) => currentIndex === index ? value : currentMinutes),
-      },
+      reminders: withEditedPopupReminders(
+        current.reminders,
+        current.reminders.popupMinutes.map((currentMinutes, currentIndex) => currentIndex === index ? value : currentMinutes),
+      ),
     }));
   };
 
@@ -1139,14 +1142,24 @@ function EventEditor({ date, event, copiedContent, googleAccounts, defaultSyncTa
   const addReminder = () => {
     setDraft((current) => current.reminders.popupMinutes.length + current.reminders.emailMinutes.length >= MAX_REMINDERS ? current : ({
       ...current,
-      reminders: { ...current.reminders, popupMinutes: [...current.reminders.popupMinutes, 10] },
+      reminders: withEditedPopupReminders(current.reminders, [...current.reminders.popupMinutes, 10]),
     }));
   };
 
   const removeReminder = (index: number) => {
     setDraft((current) => ({
       ...current,
-      reminders: { ...current.reminders, popupMinutes: current.reminders.popupMinutes.filter((_, currentIndex) => currentIndex !== index) },
+      reminders: withEditedPopupReminders(
+        current.reminders,
+        current.reminders.popupMinutes.filter((_, currentIndex) => currentIndex !== index),
+      ),
+    }));
+  };
+
+  const toggleReminderPreset = (minutes: number) => {
+    setDraft((current) => ({
+      ...current,
+      reminders: togglePopupReminderPreset(current.reminders, minutes),
     }));
   };
 
@@ -1334,6 +1347,28 @@ function EventEditor({ date, event, copiedContent, googleAccounts, defaultSyncTa
               <div><strong>Koyomadoのポップアップ通知</strong><small>アプリが起動している間、設定時刻に予定を表示し、通知音は設定した秒数だけ鳴ります。</small></div>
               <button type="button" className="secondary-button" onClick={addReminder} disabled={draft.reminders.popupMinutes.length + draft.reminders.emailMinutes.length >= MAX_REMINDERS}>＋ 通知を追加</button>
             </div>
+            <div className="reminder-presets">
+              <div><strong>よく使う通知時間</strong><small>複数選択できます</small></div>
+              <div className="reminder-preset-options" role="group" aria-label="よく使う通知時間">
+                {REMINDER_PRESETS.map((preset) => {
+                  const selected = draft.reminders.popupMinutes.includes(preset.minutes);
+                  const full = draft.reminders.popupMinutes.length + draft.reminders.emailMinutes.length >= MAX_REMINDERS;
+                  return (
+                    <button
+                      type="button"
+                      className="reminder-preset-button"
+                      key={preset.minutes}
+                      aria-pressed={selected}
+                      disabled={!selected && full}
+                      onClick={() => toggleReminderPreset(preset.minutes)}
+                    >
+                      <span className="reminder-preset-dot" aria-hidden="true" />
+                      {preset.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
             {draft.reminders.popupMinutes.length === 0 ? (
               <p className="reminder-empty">この予定の通知はありません。</p>
             ) : (
@@ -1359,8 +1394,11 @@ function EventEditor({ date, event, copiedContent, googleAccounts, defaultSyncTa
             {(googleAccounts.length > 0 || sourceGoogleAccountId) && (
               <div className="google-reminder-mode">
                 <strong>Googleカレンダー側の通知</strong>
-                <label><input type="radio" name="google-reminder-mode" checked={draft.reminders.useGoogleDefault} onChange={() => setDraft((current) => ({ ...current, reminders: { ...current.reminders, useGoogleDefault: true } }))} />Googleカレンダーの既定設定を使う</label>
-                <label><input type="radio" name="google-reminder-mode" checked={!draft.reminders.useGoogleDefault} onChange={() => setDraft((current) => ({ ...current, reminders: { ...current.reminders, useGoogleDefault: false } }))} />上の通知時刻をGoogleにも保存する</label>
+                <label><input type="radio" name="google-reminder-mode" checked={!draft.reminders.useGoogleDefault} onChange={() => setDraft((current) => ({ ...current, reminders: { ...current.reminders, useGoogleDefault: false } }))} />上の通知時刻をGoogleにも保存する（おすすめ）</label>
+                <label><input type="radio" name="google-reminder-mode" checked={draft.reminders.useGoogleDefault} onChange={() => setDraft((current) => ({ ...current, reminders: { ...current.reminders, useGoogleDefault: true } }))} />Googleカレンダーの既定通知を使う</label>
+                {draft.reminders.useGoogleDefault && draft.reminders.popupMinutes.length > 0 && (
+                  <small className="google-reminder-note">上の通知時刻はKoyomadoだけで使います。Google側ではカレンダーの既定通知が使われます。既定が30分前の場合、終日予定は前日の23:30に通知されます。</small>
+                )}
                 {draft.reminders.emailMinutes.length > 0 && <small>Googleから取得したメール通知（{draft.reminders.emailMinutes.map(reminderLabel).join("、")}）も維持します。</small>}
               </div>
             )}

@@ -143,7 +143,7 @@ struct GoogleEventReminderOverride {
 struct GoogleEventReminders {
     #[serde(default = "default_true")]
     use_default: bool,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     overrides: Vec<GoogleEventReminderOverride>,
 }
 
@@ -1899,12 +1899,39 @@ mod tests {
     }
 
     #[test]
+    fn explicit_all_day_reminders_keep_one_day_six_hours_and_thirty_minutes() {
+        let mut event = local_event("birthday-reminders", "2027-01-20");
+        event.reminders = EventReminders {
+            use_google_default: false,
+            popup_minutes: vec![30, 360, 1_440],
+            email_minutes: vec![],
+        };
+
+        let mutation = mutation_from_event(&event, true).unwrap();
+        assert!(!mutation.reminders.use_default);
+        assert_eq!(
+            mutation
+                .reminders
+                .overrides
+                .iter()
+                .map(|reminder| (reminder.method.as_str(), reminder.minutes))
+                .collect::<Vec<_>>(),
+            vec![("popup", 30), ("popup", 360), ("popup", 1_440)]
+        );
+    }
+
+    #[test]
     fn local_popup_can_coexist_with_google_default_without_false_difference() {
         let mut event = local_event("local-popup", "2026-07-22");
         event.reminders.popup_minutes = vec![10];
         let mut remote = remote_event("remote-popup", "2026-07-22");
         remote.summary = event.title.clone();
         assert!(remote_matches_local(&remote, &event));
+
+        let mutation = mutation_from_event(&event, true).unwrap();
+        let serialized = serde_json::to_value(&mutation.reminders).unwrap();
+        assert_eq!(serialized["useDefault"], serde_json::json!(true));
+        assert_eq!(serialized["overrides"], serde_json::json!([]));
     }
 
     #[test]
