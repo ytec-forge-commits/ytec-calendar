@@ -61,8 +61,13 @@ jobs:
           & ./scripts/package-portable.ps1 -SkipBuild
           $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
           $archive = "release/koyomado-v$version-windows-portable.zip"
-          $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $archive).Hash.ToLowerInvariant()
-          "$hash  $(Split-Path -Leaf $archive)" | Set-Content -Encoding ascii -LiteralPath "release/SHA256SUMS.txt"
+          $manual = "docs/Koyomado操作説明書.pdf"
+          $archiveHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $archive).Hash.ToLowerInvariant()
+          $manualHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $manual).Hash.ToLowerInvariant()
+          @(
+            "$archiveHash  $(Split-Path -Leaf $archive)"
+            "$manualHash  $(Split-Path -Leaf $manual)"
+          ) | Set-Content -Encoding ascii -LiteralPath "release/SHA256SUMS.txt"
 
       - name: Upload unsigned release artifact
         id: upload-unsigned
@@ -73,6 +78,7 @@ jobs:
             src-tauri/target/release/koyomado.exe
             release/koyomado-v*-windows-portable.zip
             release/SHA256SUMS.txt
+            docs/Koyomado操作説明書.pdf
           if-no-files-found: error
           retention-days: 14
 
@@ -88,7 +94,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             gh release create $env:GITHUB_REF_NAME --draft --verify-tag --title "Koyomado $version" --generate-notes
           }
-          gh release upload $env:GITHUB_REF_NAME $archive "release/SHA256SUMS.txt" --clobber
+          gh release upload $env:GITHUB_REF_NAME $archive "docs/Koyomado操作説明書.pdf" "release/SHA256SUMS.txt" --clobber
 
 # SignPath Foundationで採択後、upload-unsignedのartifact-idを
 # signpath/github-action-submit-signing-requestへ渡す署名ステップを追加します。
