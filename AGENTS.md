@@ -9,6 +9,7 @@
 - Googleの更新トークンは `calendar-data.json` へ保存せず、アカウントID単位でWindows資格情報マネージャーへ保存する。OAuthクライアントJSON、更新トークン、実予定をテスト、ログ、Git、Issueへ含めない。
 - UI書体は同梱したLINE Seed JPへ統一し、予定ごとのフォント装飾機能は追加しない。
 - 配布はインストーラーではなくポータブルZIPを正本とする。アップデート時は利用者の `data` フォルダーを上書きしない。
+- GitHub Releaseへ添付する単体ファイル名はASCIIで固定する。操作説明書はRelease上では `Koyomado.pdf` とし、`SHA256SUMS.txt` の名前も実際のRelease asset名と一致させる（ZIP内の日本語名は維持してよい）。
 - `scripts/package-portable.ps1` はWindows PowerShell 5.1から実行するため、日本語を含む同ファイルのUTF-8 BOMを保持し、配布前に5.1で構文確認する。
 - 完了前に `npm run lint`、`npm test`、`npm run build`、`cargo test --locked`、`cargo clippy --locked --all-targets -- -D warnings`、`npm run tauri:build`、可能ならWindows実機操作を確認する。
 - 保存形式version 3では開始日・終了日、繰り返し条件、例外予定、Google同期リンク、競合情報、表示方法を保持する。終了日がない既存予定は開始日と同じ日へ補完し、version 1 / 2から移行するときは `calendar-data.v1.backup.json` / `calendar-data.v2.backup.json` を残す。
