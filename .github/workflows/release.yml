@@ -67,7 +67,7 @@ jobs:
           @(
             "$archiveHash  $(Split-Path -Leaf $archive)"
             "$manualHash  $(Split-Path -Leaf $manual)"
-          ) | Set-Content -Encoding ascii -LiteralPath "release/SHA256SUMS.txt"
+          ) | Set-Content -Encoding utf8NoBOM -LiteralPath "release/SHA256SUMS.txt"
 
       - name: Upload unsigned release artifact
         id: upload-unsigned
