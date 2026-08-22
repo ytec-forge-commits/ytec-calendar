@@ -19,7 +19,8 @@
     "@tauri-apps/api": "2.11.1",
     "@tauri-apps/plugin-autostart": "2.5.1",
     "react": "19.2.7",
-    "react-dom": "19.2.7"
+    "react-dom": "19.2.7",
+    "rrule": "2.8.1"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

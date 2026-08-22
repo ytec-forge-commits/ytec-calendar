@@ -12,17 +12,122 @@ use tauri::{
     Manager, PhysicalPosition, PhysicalSize, WindowEvent,
 };
 
-const CALENDAR_DATA_VERSION: u32 = 2;
+mod credentials;
+mod google;
+
+const CALENDAR_DATA_VERSION: u32 = 3;
 const WINDOW_STATE_VERSION: u32 = 2;
 const MAX_WINDOW_PROFILES: usize = 12;
 const MIN_WINDOW_HEIGHT: u32 = 600;
 const EXPANDED_MIN_WINDOW_WIDTH: u32 = 806;
 const COLLAPSED_MIN_WINDOW_WIDTH: u32 = 375;
+static APP_DATA_LOCK: Mutex<()> = Mutex::new(());
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct EventStyle {
     color: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+enum EventRecurrence {
+    Simple {
+        frequency: String,
+        interval: u32,
+        #[serde(default)]
+        week_days: Vec<u8>,
+        monthly_mode: String,
+        end: RecurrenceEnd,
+        #[serde(default)]
+        excluded_dates: Vec<String>,
+    },
+    Google {
+        #[serde(default)]
+        lines: Vec<String>,
+        #[serde(default = "default_time_zone")]
+        time_zone: String,
+        #[serde(default)]
+        excluded_dates: Vec<String>,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
+enum RecurrenceEnd {
+    Never,
+    Until { date: String },
+    Count { count: u32 },
+}
+
+fn default_time_zone() -> String {
+    "Asia/Tokyo".into()
+}
+
+fn default_yearly_recurrence() -> EventRecurrence {
+    EventRecurrence::Simple {
+        frequency: "yearly".into(),
+        interval: 1,
+        week_days: Vec::new(),
+        monthly_mode: "day-of-month".into(),
+        end: RecurrenceEnd::Never,
+        excluded_dates: Vec::new(),
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RecurrenceException {
+    master_id: String,
+    original_date: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GoogleEventLink {
+    account_id: String,
+    calendar_id: String,
+    event_id: String,
+    #[serde(default)]
+    etag: String,
+    #[serde(default)]
+    google_updated_at: String,
+    #[serde(default)]
+    local_updated_at: String,
+    #[serde(default)]
+    recurring_event_id: Option<String>,
+    #[serde(default)]
+    original_start: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+enum EventOrigin {
+    Local,
+    Google { account_id: String },
+}
+
+impl Default for EventOrigin {
+    fn default() -> Self {
+        Self::Local
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SyncConflict {
+    account_id: String,
+    detected_at: String,
+    reason: String,
+    message: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -33,12 +138,24 @@ struct CalendarEvent {
     date: String,
     #[serde(default)]
     annual: bool,
+    #[serde(default)]
+    recurrence: Option<EventRecurrence>,
+    #[serde(default)]
+    recurrence_exception: Option<RecurrenceException>,
     all_day: bool,
     start_time: String,
     end_time: String,
     location: String,
     notes: String,
     style: EventStyle,
+    #[serde(default)]
+    origin: EventOrigin,
+    #[serde(default)]
+    sync_targets: Vec<String>,
+    #[serde(default)]
+    google_links: Vec<GoogleEventLink>,
+    #[serde(default)]
+    sync_conflict: Option<SyncConflict>,
     created_at: String,
     updated_at: String,
 }
@@ -57,6 +174,69 @@ struct AppSettings {
     theme: String,
     #[serde(default)]
     sidebar_collapsed: bool,
+    #[serde(default)]
+    window_display_mode: WindowDisplayMode,
+    #[serde(default)]
+    google: GoogleIntegrationSettings,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+enum WindowDisplayMode {
+    #[default]
+    Taskbar,
+    Tray,
+    Both,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GoogleOAuthClient {
+    client_id: String,
+    #[serde(default)]
+    client_secret: String,
+    #[serde(default)]
+    project_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GoogleAccount {
+    id: String,
+    email: String,
+    #[serde(default)]
+    display_name: String,
+    #[serde(default)]
+    calendar_id: String,
+    #[serde(default)]
+    calendar_name: String,
+    #[serde(default = "default_true")]
+    sync_enabled: bool,
+    #[serde(default)]
+    sync_token: String,
+    #[serde(default)]
+    connected_at: String,
+    #[serde(default)]
+    last_sync_at: String,
+    #[serde(default)]
+    last_error: String,
+    #[serde(default)]
+    needs_reauth: bool,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct GoogleIntegrationSettings {
+    #[serde(default)]
+    enabled: bool,
+    #[serde(default)]
+    client: Option<GoogleOAuthClient>,
+    #[serde(default)]
+    accounts: Vec<GoogleAccount>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -78,6 +258,8 @@ impl Default for AppData {
             settings: AppSettings {
                 theme: "morning-mist".into(),
                 sidebar_collapsed: false,
+                window_display_mode: WindowDisplayMode::Taskbar,
+                google: GoogleIntegrationSettings::default(),
             },
         }
     }
@@ -180,6 +362,7 @@ struct TrackedWindow {
 }
 
 struct WindowTracker(Mutex<TrackedWindow>);
+struct DisplayModeState(Mutex<WindowDisplayMode>);
 
 fn portable_data_dir() -> Result<PathBuf, String> {
     let executable = std::env::current_exe()
@@ -276,7 +459,24 @@ fn read_json_with_recovery<T: DeserializeOwned + Serialize>(
 fn load_app_data_inner() -> Result<AppData, String> {
     let path = portable_data_dir()?.join("calendar-data.json");
     let mut data: AppData = read_json_with_recovery(&path)?.unwrap_or_default();
-    if data.version == 1 {
+    if data.version == 1 || data.version == 2 {
+        let migration_backup =
+            path.with_file_name(format!("calendar-data.v{}.backup.json", data.version));
+        if path.exists() && !migration_backup.exists() {
+            fs::copy(&path, &migration_backup)
+                .map_err(|error| format!("移行前バックアップを作成できません: {error}"))?;
+        }
+        for event in data.events.iter_mut() {
+            if event.annual && event.recurrence.is_none() {
+                event.recurrence = Some(default_yearly_recurrence());
+            }
+        }
+        for deleted in data.deleted_events.iter_mut() {
+            if deleted.event.annual && deleted.event.recurrence.is_none() {
+                deleted.event.recurrence = Some(default_yearly_recurrence());
+            }
+        }
+        data.settings.google.accounts.truncate(3);
         data.version = CALENDAR_DATA_VERSION;
         write_json_with_backup(&path, &data)?;
     } else if data.version != CALENDAR_DATA_VERSION {
@@ -290,11 +490,17 @@ fn load_app_data_inner() -> Result<AppData, String> {
 
 #[tauri::command]
 fn load_app_data() -> Result<AppData, String> {
+    let _guard = APP_DATA_LOCK
+        .lock()
+        .map_err(|_| "予定データの読み込みを開始できません".to_string())?;
     load_app_data_inner()
 }
 
 #[tauri::command]
 fn save_app_data(data: AppData) -> Result<(), String> {
+    let _guard = APP_DATA_LOCK
+        .lock()
+        .map_err(|_| "予定データの保存を開始できません".to_string())?;
     if data.version != CALENDAR_DATA_VERSION {
         return Err(format!("未対応の保存形式です（version: {}）", data.version));
     }
@@ -304,6 +510,9 @@ fn save_app_data(data: AppData) -> Result<(), String> {
         .any(|event| event.id.trim().is_empty() || event.title.trim().is_empty())
     {
         return Err("予定名またはIDが空の予定は保存できません".into());
+    }
+    if data.settings.google.accounts.len() > 3 {
+        return Err("Googleアカウントは3件まで接続できます".into());
     }
     write_json_with_backup(&portable_data_dir()?.join("calendar-data.json"), &data)
 }
@@ -349,6 +558,38 @@ fn apply_sidebar_window_mode<R: tauri::Runtime>(
 #[tauri::command]
 fn set_sidebar_window_mode(window: tauri::WebviewWindow, collapsed: bool) -> Result<(), String> {
     apply_sidebar_window_mode(&window, collapsed)
+}
+
+fn apply_window_display_mode<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    mode: WindowDisplayMode,
+) -> Result<(), String> {
+    let window = app
+        .get_webview_window("main")
+        .ok_or_else(|| "メインウィンドウを確認できません".to_string())?;
+    window
+        .set_skip_taskbar(mode == WindowDisplayMode::Tray)
+        .map_err(|error| format!("タスクバー表示を変更できません: {error}"))?;
+    if let Some(tray) = app.tray_by_id("main") {
+        tray.set_visible(mode != WindowDisplayMode::Taskbar)
+            .map_err(|error| format!("タスクトレイ表示を変更できません: {error}"))?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn set_window_display_mode(
+    app: tauri::AppHandle,
+    state: tauri::State<DisplayModeState>,
+    mode: WindowDisplayMode,
+) -> Result<(), String> {
+    apply_window_display_mode(&app, mode)?;
+    let mut current = state
+        .0
+        .lock()
+        .map_err(|_| "ウィンドウ表示設定を更新できません".to_string())?;
+    *current = mode;
+    Ok(())
 }
 
 fn monitor_geometries<R: tauri::Runtime>(
@@ -668,11 +909,17 @@ pub fn run() {
             last_saved: Instant::now(),
             restoring: true,
         })))
+        .manage(DisplayModeState(Mutex::new(WindowDisplayMode::Taskbar)))
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
         ))
         .setup(|app| {
+            let app_data = load_app_data_inner().unwrap_or_default();
+            let display_mode = app_data.settings.window_display_mode;
+            if let Ok(mut current) = app.state::<DisplayModeState>().0.lock() {
+                *current = display_mode;
+            }
             let show_item =
                 MenuItem::with_id(app, "show-calendar", "カレンダーを表示", true, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit-calendar", "終了", true, None::<&str>)?;
@@ -702,11 +949,10 @@ pub fn run() {
                 tray_builder = tray_builder.icon(icon.clone());
             }
             tray_builder.build(app)?;
+            apply_window_display_mode(app.handle(), display_mode).map_err(std::io::Error::other)?;
 
             if let Some(window) = app.get_webview_window("main") {
-                let sidebar_collapsed = load_app_data_inner()
-                    .map(|data| data.settings.sidebar_collapsed)
-                    .unwrap_or(false);
+                let sidebar_collapsed = app_data.settings.sidebar_collapsed;
                 let min_width = sidebar_min_width(sidebar_collapsed);
                 window.set_min_size(Some(PhysicalSize::new(min_width, MIN_WINDOW_HEIGHT)))?;
 
@@ -727,8 +973,28 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
-                api.prevent_close();
-                let _ = window.hide();
+                let display_mode = window
+                    .state::<DisplayModeState>()
+                    .0
+                    .lock()
+                    .map(|mode| *mode)
+                    .unwrap_or_default();
+                if display_mode != WindowDisplayMode::Taskbar {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
+
+            if matches!(event, WindowEvent::Resized(_)) && window.is_minimized().unwrap_or(false) {
+                let display_mode = window
+                    .state::<DisplayModeState>()
+                    .0
+                    .lock()
+                    .map(|mode| *mode)
+                    .unwrap_or_default();
+                if display_mode == WindowDisplayMode::Tray {
+                    let _ = window.hide();
+                }
             }
 
             let tracker = window.state::<WindowTracker>();
@@ -784,7 +1050,13 @@ pub fn run() {
             load_app_data,
             save_app_data,
             get_data_directory,
-            set_sidebar_window_mode
+            set_sidebar_window_mode,
+            set_window_display_mode,
+            google::google_connect_account,
+            google::google_list_calendars,
+            google::google_credential_statuses,
+            google::google_disconnect_account,
+            google::google_sync_all
         ])
         .run(tauri::generate_context!())
         .expect("Koyomadoの起動に失敗しました");
@@ -834,6 +1106,40 @@ mod tests {
         .expect("version 1 event should deserialize");
 
         assert!(!event.annual);
+    }
+
+    #[test]
+    fn version_three_recurrence_uses_frontend_camel_case_fields() {
+        let recurrence: EventRecurrence = serde_json::from_value(serde_json::json!({
+            "kind": "simple",
+            "frequency": "weekly",
+            "interval": 1,
+            "weekDays": [1, 5],
+            "monthlyMode": "day-of-month",
+            "end": { "type": "never" },
+            "excludedDates": ["2026-08-24"]
+        }))
+        .expect("frontend recurrence must deserialize");
+        let serialized = serde_json::to_value(&recurrence).expect("recurrence must serialize");
+        assert_eq!(serialized["weekDays"], serde_json::json!([1, 5]));
+        assert_eq!(serialized["monthlyMode"], "day-of-month");
+        assert_eq!(
+            serialized["excludedDates"],
+            serde_json::json!(["2026-08-24"])
+        );
+        assert!(serialized.get("week_days").is_none());
+    }
+
+    #[test]
+    fn google_origin_uses_frontend_account_id_field() {
+        let origin: EventOrigin = serde_json::from_value(serde_json::json!({
+            "kind": "google",
+            "accountId": "google-account"
+        }))
+        .expect("frontend origin must deserialize");
+        let serialized = serde_json::to_value(&origin).expect("origin must serialize");
+        assert_eq!(serialized["accountId"], "google-account");
+        assert!(serialized.get("account_id").is_none());
     }
 
     #[test]

@@ -1,21 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
-import { copyEventContent, duplicateEventToDate, eventsForDate, getHolidayMap, getMonthCells, getTodayView, isValidTimeRange, moveEventToDate, pasteEventContent, shiftMonth, toDateKey, upcomingEvents } from "./calendar";
+import { copyEventContent, duplicateEventToDate, eventsForDate, getHolidayMap, getMonthCells, getTodayView, isValidTimeRange, moveEventToDate, pasteEventContent, recurrenceMatches, shiftMonth, toDateKey, upcomingEvents } from "./calendar";
 import type { CalendarEvent } from "../types";
-import { DEFAULT_EVENT_STYLE } from "../types";
+import { createEmptyEvent } from "../types";
 
 const makeEvent = (id: string, date: string, startTime = "10:00", allDay = false): CalendarEvent => ({
-  id,
+  ...createEmptyEvent(id, date, "2026-07-21T00:00:00.000Z"),
   title: id,
-  date,
-  annual: false,
-  allDay,
   startTime,
   endTime: "11:00",
-  location: "",
-  notes: "",
-  style: DEFAULT_EVENT_STYLE,
-  createdAt: "2026-07-21T00:00:00.000Z",
-  updatedAt: "2026-07-21T00:00:00.000Z",
+  allDay,
 });
 
 describe("calendar utilities", () => {
@@ -65,7 +58,11 @@ describe("calendar utilities", () => {
   });
 
   it("毎年の記念日を年に関係なく同じ月日に表示する", () => {
-    const anniversary = { ...makeEvent("誕生日", "2024-07-24", "", true), annual: true };
+    const anniversary = {
+      ...makeEvent("誕生日", "2024-07-24", "", true),
+      annual: true,
+      recurrence: { kind: "simple" as const, frequency: "yearly" as const, interval: 1, weekDays: [], monthlyMode: "day-of-month" as const, end: { type: "never" as const }, excludedDates: [] },
+    };
     const occurrence = eventsForDate([anniversary], "2027-07-24");
 
     expect(occurrence).toHaveLength(1);
@@ -74,11 +71,118 @@ describe("calendar utilities", () => {
   });
 
   it("直近予定にも毎年の記念日を展開する", () => {
-    const anniversary = { ...makeEvent("記念日", "2021-01-02", "", true), annual: true };
+    const anniversary = {
+      ...makeEvent("記念日", "2021-01-02", "", true),
+      annual: true,
+      recurrence: { kind: "simple" as const, frequency: "yearly" as const, interval: 1, weekDays: [], monthlyMode: "day-of-month" as const, end: { type: "never" as const }, excludedDates: [] },
+    };
 
     expect(upcomingEvents([anniversary], new Date(2026, 11, 30), 4)).toMatchObject([
       { id: "記念日", date: "2027-01-02", annual: true },
     ]);
+  });
+
+  it("毎日・毎週・毎月・毎年の繰り返しを指定間隔で展開する", () => {
+    const simple = (frequency: "daily" | "weekly" | "monthly" | "yearly") => ({
+      kind: "simple" as const,
+      frequency,
+      interval: 2,
+      weekDays: frequency === "weekly" ? [1, 5] : [],
+      monthlyMode: "day-of-month" as const,
+      end: { type: "never" as const },
+      excludedDates: [],
+    });
+    const daily = { ...makeEvent("daily", "2026-01-01"), recurrence: simple("daily") };
+    const weekly = { ...makeEvent("weekly", "2026-01-05"), recurrence: simple("weekly") };
+    const monthly = { ...makeEvent("monthly", "2026-01-15"), recurrence: simple("monthly") };
+    const yearly = { ...makeEvent("yearly", "2024-02-29"), recurrence: simple("yearly") };
+
+    expect(recurrenceMatches(daily, "2026-01-03")).toBe(true);
+    expect(recurrenceMatches(daily, "2026-01-02")).toBe(false);
+    expect(recurrenceMatches(weekly, "2026-01-09")).toBe(true);
+    expect(recurrenceMatches(weekly, "2026-01-12")).toBe(false);
+    expect(recurrenceMatches(weekly, "2026-01-19")).toBe(true);
+    expect(recurrenceMatches(monthly, "2026-03-15")).toBe(true);
+    expect(recurrenceMatches(monthly, "2026-02-15")).toBe(false);
+    expect(recurrenceMatches(yearly, "2028-02-29")).toBe(true);
+    expect(recurrenceMatches(yearly, "2026-02-28")).toBe(false);
+  });
+
+  it("毎月の第何曜日、終了日、回数、除外日を正しく扱う", () => {
+    const monthly = {
+      ...makeEvent("monthly-weekday", "2026-01-13"),
+      recurrence: {
+        kind: "simple" as const,
+        frequency: "monthly" as const,
+        interval: 1,
+        weekDays: [],
+        monthlyMode: "weekday-of-month" as const,
+        end: { type: "until" as const, date: "2026-03-31" },
+        excludedDates: ["2026-02-10"],
+      },
+    };
+    expect(recurrenceMatches(monthly, "2026-02-10")).toBe(false);
+    expect(recurrenceMatches(monthly, "2026-03-10")).toBe(true);
+    expect(recurrenceMatches(monthly, "2026-04-14")).toBe(false);
+
+    const counted = {
+      ...makeEvent("counted", "2026-01-01"),
+      recurrence: {
+        kind: "simple" as const,
+        frequency: "daily" as const,
+        interval: 1,
+        weekDays: [],
+        monthlyMode: "day-of-month" as const,
+        end: { type: "count" as const, count: 3 },
+        excludedDates: ["2026-01-02"],
+      },
+    };
+    expect(recurrenceMatches(counted, "2026-01-03")).toBe(true);
+    expect(recurrenceMatches(counted, "2026-01-04")).toBe(false);
+  });
+
+  it("繰り返しの1回だけを移動した例外は元の日に重複せず移動先に出る", () => {
+    const master = {
+      ...makeEvent("series", "2026-07-01"),
+      recurrence: {
+        kind: "simple" as const,
+        frequency: "daily" as const,
+        interval: 1,
+        weekDays: [],
+        monthlyMode: "day-of-month" as const,
+        end: { type: "never" as const },
+        excludedDates: [],
+      },
+    };
+    const moved = {
+      ...makeEvent("exception", "2026-07-10"),
+      recurrenceException: { masterId: master.id, originalDate: "2026-07-08" },
+    };
+    expect(eventsForDate([master, moved], "2026-07-08")).toHaveLength(0);
+    expect(eventsForDate([master, moved], "2026-07-10").map((event) => event.id).sort()).toEqual(["exception", "series"]);
+  });
+
+  it("GoogleのRRULEをKoyomadoの月表示へ展開する", () => {
+    const imported = {
+      ...makeEvent("google-rule", "2026-07-06"),
+      recurrence: {
+        kind: "google" as const,
+        lines: ["RRULE:FREQ=WEEKLY;BYDAY=MO,WE;COUNT=4"],
+        timeZone: "Asia/Tokyo",
+        excludedDates: [],
+      },
+    };
+    expect(recurrenceMatches(imported, "2026-07-06")).toBe(true);
+    expect(recurrenceMatches(imported, "2026-07-08")).toBe(true);
+    expect(recurrenceMatches(imported, "2026-07-13")).toBe(true);
+    expect(recurrenceMatches(imported, "2026-07-20")).toBe(false);
+  });
+
+  it("同じ日に5件、月内に10件あっても予定データを欠落させない", () => {
+    const fiveOnOneDay = Array.from({ length: 5 }, (_, index) => makeEvent(`day-${index + 1}`, "2026-07-22", `0${index + 8}:00`));
+    const tenInMonth = Array.from({ length: 10 }, (_, index) => makeEvent(`month-${index + 1}`, `2026-07-${String(index + 1).padStart(2, "0")}`));
+    expect(eventsForDate(fiveOnOneDay, "2026-07-22")).toHaveLength(5);
+    expect(tenInMonth.flatMap((event) => eventsForDate(tenInMonth, event.date))).toHaveLength(10);
   });
 
   it("月移動で年をまたげる", () => {

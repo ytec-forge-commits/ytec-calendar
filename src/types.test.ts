@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import { DATA_VERSION, THEMES } from "./types";
 
 describe("保存形式", () => {
-  it("記念日対応のversion 2を使用する", () => {
-    expect(DATA_VERSION).toBe(2);
+  it("Google同期と繰り返し予定対応のversion 3を使用する", () => {
+    expect(DATA_VERSION).toBe(3);
   });
 });
 

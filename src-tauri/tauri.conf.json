@@ -21,7 +21,7 @@
         "center": true,
         "resizable": true,
         "dragDropEnabled": false,
-        "skipTaskbar": true,
+        "skipTaskbar": false,
         "fullscreen": false,
         "maximizable": true
       }
