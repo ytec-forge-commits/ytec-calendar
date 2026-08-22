@@ -134,6 +134,8 @@ struct CalendarEvent {
     title: String,
     date: String,
     #[serde(default)]
+    end_date: String,
+    #[serde(default)]
     annual: bool,
     #[serde(default)]
     recurrence: Option<EventRecurrence>,
@@ -155,6 +157,14 @@ struct CalendarEvent {
     sync_conflict: Option<SyncConflict>,
     created_at: String,
     updated_at: String,
+}
+
+fn normalize_event_range(event: &mut CalendarEvent) -> bool {
+    if event.end_date.is_empty() || event.end_date < event.date {
+        event.end_date = event.date.clone();
+        return true;
+    }
+    false
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -456,6 +466,7 @@ fn read_json_with_recovery<T: DeserializeOwned + Serialize>(
 fn load_app_data_inner() -> Result<AppData, String> {
     let path = portable_data_dir()?.join("calendar-data.json");
     let mut data: AppData = read_json_with_recovery(&path)?.unwrap_or_default();
+    let mut should_write = !path.exists();
     if data.version == 1 || data.version == 2 {
         let migration_backup =
             path.with_file_name(format!("calendar-data.v{}.backup.json", data.version));
@@ -475,11 +486,17 @@ fn load_app_data_inner() -> Result<AppData, String> {
         }
         data.settings.google.accounts.truncate(3);
         data.version = CALENDAR_DATA_VERSION;
-        write_json_with_backup(&path, &data)?;
+        should_write = true;
     } else if data.version != CALENDAR_DATA_VERSION {
         return Err(format!("未対応の保存形式です（version: {}）", data.version));
     }
-    if !path.exists() {
+    for event in data.events.iter_mut() {
+        should_write |= normalize_event_range(event);
+    }
+    for deleted in data.deleted_events.iter_mut() {
+        should_write |= normalize_event_range(&mut deleted.event);
+    }
+    if should_write {
         write_json_with_backup(&path, &data)?;
     }
     Ok(data)
@@ -501,12 +518,16 @@ fn save_app_data(data: AppData) -> Result<(), String> {
     if data.version != CALENDAR_DATA_VERSION {
         return Err(format!("未対応の保存形式です（version: {}）", data.version));
     }
-    if data
-        .events
-        .iter()
-        .any(|event| event.id.trim().is_empty() || event.title.trim().is_empty())
-    {
-        return Err("予定名またはIDが空の予定は保存できません".into());
+    if data.events.iter().any(|event| {
+        event.id.trim().is_empty()
+            || event.title.trim().is_empty()
+            || event.end_date < event.date
+            || (!event.all_day
+                && (event.start_time.is_empty()
+                    || event.end_time.is_empty()
+                    || (event.end_date == event.date && event.end_time <= event.start_time)))
+    }) {
+        return Err("予定名、ID、または開始・終了日時が正しくない予定は保存できません".into());
     }
     if data.settings.google.accounts.len() > 3 {
         return Err("Googleアカウントは3件まで接続できます".into());
@@ -1103,6 +1124,11 @@ mod tests {
         .expect("version 1 event should deserialize");
 
         assert!(!event.annual);
+        assert!(event.end_date.is_empty());
+
+        let mut normalized = event;
+        assert!(normalize_event_range(&mut normalized));
+        assert_eq!(normalized.end_date, "2026-07-22");
     }
 
     #[test]

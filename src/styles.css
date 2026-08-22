@@ -378,8 +378,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .copy-paste-details strong { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: .78rem; }
 .paste-button { min-height: 34px; flex: 0 0 auto; padding: 0 12px; background: var(--surface-solid); }
 .form-row { display: flex; align-items: end; gap: 12px; }
-.date-time-row > .field { flex: 1 1 150px; }
-.time-fields { flex: 2 1 240px; display: grid; grid-template-columns: 1fr 16px 1fr; gap: 6px; align-items: end; }
+.event-date-row { display: grid; grid-template-columns: minmax(0, 1fr) 16px minmax(0, 1fr) auto; gap: 8px; }
+.event-time-row { display: grid; grid-template-columns: minmax(0, 1fr) 16px minmax(0, 1fr); gap: 8px; }
+.event-date-row > .field, .event-time-row > .field { min-width: 0; }
 .time-separator { padding-bottom: 10px; color: var(--text-faint); text-align: center; }
 .toggle-field { height: 39px; display: flex; align-items: center; gap: 7px; color: var(--text-soft); font-size: .72rem; font-weight: 700; cursor: pointer; }
 .toggle-field input { position: absolute; opacity: 0; pointer-events: none; }
@@ -484,7 +485,16 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .oauth-client-card > div, .google-account-title > span:first-child { min-width: 0; display: grid; gap: 3px; }
 .oauth-client-card strong, .google-account-heading strong, .google-account-title strong { font-size: .73rem; }
 .oauth-client-card small, .google-account-heading small, .google-account-title small { overflow: hidden; color: var(--text-soft); font-size: .62rem; text-overflow: ellipsis; white-space: nowrap; }
-.file-button { position: relative; flex: 0 0 auto; overflow: hidden; cursor: pointer; }
+.file-button {
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  cursor: pointer;
+  line-height: 1;
+}
 .file-button input { width: 1px; height: 1px; position: absolute; opacity: 0; }
 .google-account-heading > span { display: flex; align-items: baseline; gap: 7px; }
 .google-heading-actions { display: flex; align-items: center; gap: 7px; }
@@ -567,9 +577,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   .event-dialog .footer-actions { justify-content: flex-end; }
   .copy-paste-bar { align-items: stretch; flex-direction: column; }
   .paste-button { width: 100%; }
-  .date-time-row { align-items: stretch; flex-wrap: wrap; }
-  .date-time-row > .field { flex-basis: calc(100% - 80px); }
-  .time-fields { flex-basis: 100%; }
+  .event-date-row { grid-template-columns: minmax(0, 1fr) 14px minmax(0, 1fr); }
+  .event-date-row .toggle-field { grid-column: 1 / -1; }
   .recurrence-grid { grid-template-columns: 1fr; }
   .sync-target-list { grid-template-columns: 1fr; }
   .weekday-picker { grid-column: auto; }

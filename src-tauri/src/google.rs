@@ -568,7 +568,7 @@ fn mutation_from_event(
                 time_zone: None,
             },
             GoogleEventDateTimeMutation {
-                date: Some(add_one_day(&event.date)?),
+                date: Some(add_one_day(&event.end_date)?),
                 date_time: None,
                 time_zone: None,
             },
@@ -582,7 +582,7 @@ fn mutation_from_event(
             },
             GoogleEventDateTimeMutation {
                 date: None,
-                date_time: Some(format!("{}T{}:00", event.date, event.end_time)),
+                date_time: Some(format!("{}T{}:00", event.end_date, event.end_time)),
                 time_zone: Some(time_zone),
             },
         )
@@ -618,7 +618,13 @@ fn stable_local_event_id(account_id: &str, event_id: &str) -> String {
 
 fn remote_matches_local(remote: &GoogleApiEvent, local: &CalendarEvent) -> bool {
     let all_day = remote.start.date.is_some();
+    let expected_end_date = if all_day {
+        add_one_day(&local.end_date).ok()
+    } else {
+        Some(local.end_date.clone())
+    };
     date_from_google(&remote.start).as_deref() == Some(local.date.as_str())
+        && date_from_google(&remote.end) == expected_end_date
         && all_day == local.all_day
         && (all_day || time_from_google(&remote.start) == local.start_time)
         && (all_day || time_from_google(&remote.end) == local.end_time)
@@ -655,6 +661,18 @@ fn local_event_from_google(
     let date = date_from_google(&remote.start)
         .ok_or_else(|| format!("Google予定「{}」の開始日を確認できません", remote.summary))?;
     let all_day = remote.start.date.is_some();
+    let remote_end_date = date_from_google(&remote.end)
+        .ok_or_else(|| format!("Google予定「{}」の終了日を確認できません", remote.summary))?;
+    let end_date = if all_day {
+        shift_date(&remote_end_date, -1)?
+    } else {
+        remote_end_date
+    };
+    let end_date = if end_date < date {
+        date.clone()
+    } else {
+        end_date
+    };
     let start_time = if all_day {
         String::new()
     } else {
@@ -699,6 +717,7 @@ fn local_event_from_google(
             remote.summary.clone()
         },
         date,
+        end_date,
         annual,
         recurrence,
         recurrence_exception,
@@ -1651,6 +1670,7 @@ mod tests {
             id: id.into(),
             title: "予定".into(),
             date: date.into(),
+            end_date: date.into(),
             annual: false,
             recurrence: None,
             recurrence_exception: None,
@@ -1737,10 +1757,38 @@ mod tests {
 
     #[test]
     fn all_day_mutation_uses_exclusive_google_end_date() {
-        let event = local_event("holiday", "2026-07-22");
+        let mut event = local_event("holiday", "2026-07-22");
+        event.end_date = "2026-07-24".into();
         let mutation = mutation_from_event(&event, true).unwrap();
         assert_eq!(mutation.start.date.as_deref(), Some("2026-07-22"));
-        assert_eq!(mutation.end.date.as_deref(), Some("2026-07-23"));
+        assert_eq!(mutation.end.date.as_deref(), Some("2026-07-25"));
+    }
+
+    #[test]
+    fn multi_day_google_event_imports_the_inclusive_local_end_date() {
+        let mut remote = remote_event("trip", "2026-09-01");
+        remote.end.date = Some("2026-09-04".into());
+        let imported = local_event_from_google(&account(), &remote, None).unwrap();
+        assert_eq!(imported.date, "2026-09-01");
+        assert_eq!(imported.end_date, "2026-09-03");
+    }
+
+    #[test]
+    fn overnight_mutation_uses_the_following_google_end_date() {
+        let mut event = local_event("late-shift", "2026-07-22");
+        event.all_day = false;
+        event.start_time = "23:30".into();
+        event.end_time = "00:30".into();
+        event.end_date = "2026-07-23".into();
+        let mutation = mutation_from_event(&event, true).unwrap();
+        assert_eq!(
+            mutation.start.date_time.as_deref(),
+            Some("2026-07-22T23:30:00")
+        );
+        assert_eq!(
+            mutation.end.date_time.as_deref(),
+            Some("2026-07-23T00:30:00")
+        );
     }
 
     #[test]

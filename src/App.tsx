@@ -1,14 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent, type FormEvent, type MouseEvent as ReactMouseEvent } from "react";
 import {
+  addDays,
   copyEventContent,
+  daysBetween,
   duplicateEventToDate,
+  endTimeOneHourAfter,
   eventsForDate,
+  formatEventPeriod,
   formatEventTime,
   getHolidayMap,
   getMonthCells,
   getTodayView,
   isRecurringEvent,
-  isValidTimeRange,
+  isValidEventRange,
   longDateLabel,
   monthTitle,
   moveEventToDate,
@@ -312,6 +316,7 @@ function App() {
         ...event,
         id: master.id,
         date: master.date,
+        endDate: addDays(master.date, daysBetween(event.date, event.endDate)),
         recurrenceException: null,
         occurrence: undefined,
         googleLinks: master.googleLinks,
@@ -509,9 +514,8 @@ function App() {
           return;
         }
         const exception: CalendarEvent = {
-          ...source,
+          ...moveEventToDate(source, targetDate, now),
           id: crypto.randomUUID(),
-          date: targetDate,
           annual: false,
           recurrence: null,
           recurrenceException: occurrence,
@@ -680,7 +684,7 @@ function App() {
                   <button key={`${event.id}:${event.occurrence?.originalDate ?? event.date}`} className="upcoming-item" onClick={() => openEventEditor(event)}>
                     <span className="upcoming-dot" style={{ background: event.style.color }} />
                     <span className="upcoming-date">{Number(event.date.slice(5, 7))}/{Number(event.date.slice(8, 10))}</span>
-                    <span className="upcoming-info"><strong>{event.title}</strong><small>{isRecurringEvent(event) ? `${recurrenceLabel(event.recurrence)}・${formatEventTime(event)}` : formatEventTime(event)}</small></span>
+                    <span className="upcoming-info"><strong>{event.title}</strong><small>{isRecurringEvent(event) ? `${recurrenceLabel(event.recurrence)}・${formatEventPeriod(event)}` : formatEventPeriod(event)}</small></span>
                   </button>
                 ))}
               </div>
@@ -756,7 +760,7 @@ function App() {
                         onClick={(clickEvent) => { clickEvent.stopPropagation(); openEventEditor(event); }}
                         onContextMenu={(mouseEvent) => openContextMenu(mouseEvent, { kind: "event", event })}
                         aria-describedby="calendar-drag-help"
-                        title={`${isRecurringEvent(event) ? `${recurrenceLabel(event.recurrence)} ` : ""}${formatEventTime(event)} ${event.title}\nドラッグで移動 / Ctrl＋ドラッグでコピー`}
+                        title={`${isRecurringEvent(event) ? `${recurrenceLabel(event.recurrence)} ` : ""}${formatEventPeriod(event)} ${event.title}\nドラッグで移動 / Ctrl＋ドラッグでコピー`}
                       >
                         {isRecurringEvent(event) && <span className="annual-indicator" aria-label="繰り返し予定">↻</span>}
                         {!event.allDay && <span className="event-time">{event.startTime}</span>}
@@ -774,7 +778,7 @@ function App() {
 
       {editing && (
         <EventEditor
-          key={editing === "new" ? `new-${selectedDate}` : editing.id}
+          key={editing === "new" ? `new-${selectedDate}` : `${editing.id}:${editing.occurrence?.originalDate ?? editing.recurrenceException?.originalDate ?? editing.date}`}
           date={selectedDate}
           event={editing === "new" ? undefined : editing}
           copiedContent={copiedContent}
@@ -877,11 +881,12 @@ function DayAgendaDialog({ date, events, onClose, onAdd, onEdit }: DayAgendaDial
         </header>
         <div className="agenda-list">
           {events.map((event) => (
-            <button key={event.id} className="agenda-event" onClick={() => onEdit(event)}>
+            <button key={`${event.id}:${event.occurrence?.originalDate ?? event.recurrenceException?.originalDate ?? event.date}`} className="agenda-event" onClick={() => onEdit(event)}>
               <span className="agenda-event-dot" style={{ background: event.style.color }} />
               <span className="agenda-event-time">{formatEventTime(event)}</span>
               <span className="agenda-event-details">
                 <strong title={event.title}>{event.title}</strong>
+                {event.endDate > event.date && <small>{formatEventPeriod(event)}</small>}
                 {event.location && <small title={event.location}>{event.location}</small>}
                 {isRecurringEvent(event) && <span className="annual-badge">{recurrenceLabel(event.recurrence)}</span>}
               </span>
@@ -963,7 +968,8 @@ function EventEditor({ date, event, copiedContent, googleAccounts, onClose, onSa
     const title = draft.title.trim();
     if (!title) return setError("予定名を入力してください。");
     if (!draft.date) return setError("日付を選択してください。");
-    if (!draft.allDay && !isValidTimeRange(draft.startTime, draft.endTime)) return setError("終了時刻は開始時刻より後にしてください。");
+    if (draft.endDate < draft.date) return setError("終了日は開始日以降にしてください。");
+    if (!isValidEventRange(draft)) return setError("同じ日の予定は、終了時刻を開始時刻より後にしてください。");
     setError("");
     void onSave({ ...draft, title, location: draft.location.trim(), notes: draft.notes.trim() }, recurrenceScope);
   };
@@ -1023,17 +1029,31 @@ function EventEditor({ date, event, copiedContent, googleAccounts, onClose, onSa
             <input autoFocus value={draft.title} onChange={(changeEvent) => patchDraft("title", changeEvent.target.value)} placeholder="例：定例ミーティング" maxLength={80} />
           </label>
 
-          <div className="form-row date-time-row">
-            <label className="field"><span>日付</span><input type="date" value={draft.date} disabled={isOccurrence && recurrenceScope === "series"} onChange={(changeEvent) => patchDraft("date", changeEvent.target.value)} /></label>
+          <div className="form-row event-date-row">
+            <label className="field"><span>開始日</span><input type="date" value={draft.date} disabled={isOccurrence && recurrenceScope === "series"} onChange={(changeEvent) => {
+              const date = changeEvent.target.value;
+              setDraft((current) => ({ ...current, date, endDate: addDays(date, daysBetween(current.date, current.endDate)) }));
+            }} /></label>
+            <span className="time-separator">→</span>
+            <label className="field"><span>終了日</span><input type="date" min={draft.date} value={draft.endDate} onChange={(changeEvent) => patchDraft("endDate", changeEvent.target.value)} /></label>
             <label className="toggle-field"><input type="checkbox" checked={draft.allDay} onChange={(changeEvent) => patchDraft("allDay", changeEvent.target.checked)} /><span className="toggle-track" /><span>終日</span></label>
-            {!draft.allDay && (
-              <div className="time-fields">
-                <label className="field"><span>開始</span><input type="time" value={draft.startTime} onChange={(changeEvent) => patchDraft("startTime", changeEvent.target.value)} /></label>
+          </div>
+          {!draft.allDay && (
+            <div className="form-row event-time-row">
+                <label className="field"><span>開始</span><input type="time" value={draft.startTime} onChange={(changeEvent) => {
+                  const startTime = changeEvent.target.value;
+                  const endTime = endTimeOneHourAfter(startTime);
+                  setDraft((current) => ({
+                    ...current,
+                    startTime,
+                    endTime,
+                    endDate: addDays(current.date, endTime && endTime <= startTime ? 1 : 0),
+                  }));
+                }} /></label>
                 <span className="time-separator">→</span>
                 <label className="field"><span>終了</span><input type="time" value={draft.endTime} onChange={(changeEvent) => patchDraft("endTime", changeEvent.target.value)} /></label>
-              </div>
-            )}
-          </div>
+            </div>
+          )}
 
           {isOccurrence && (
             <fieldset className="recurrence-scope-panel">
@@ -1108,7 +1128,7 @@ function EventEditor({ date, event, copiedContent, googleAccounts, onClose, onSa
                       <option value="count">回数を指定</option>
                     </select>
                   </label>
-                  {draft.recurrence.end.type === "until" && <label className="field"><span>終了日</span><input type="date" min={draft.date} value={draft.recurrence.end.date} onChange={(changeEvent) => patchSimpleRecurrence({ end: { type: "until", date: changeEvent.target.value } })} /></label>}
+                  {draft.recurrence.end.type === "until" && <label className="field"><span>繰り返し終了日</span><input type="date" min={draft.date} value={draft.recurrence.end.date} onChange={(changeEvent) => patchSimpleRecurrence({ end: { type: "until", date: changeEvent.target.value } })} /></label>}
                   {draft.recurrence.end.type === "count" && <label className="field"><span>回数</span><span className="number-with-unit"><input type="number" min="1" max="999" value={draft.recurrence.end.count} onChange={(changeEvent) => patchSimpleRecurrence({ end: { type: "count", count: Math.max(1, Math.min(999, Number(changeEvent.target.value) || 1)) } })} /><small>回</small></span></label>}
                 </>
               )}
@@ -1151,7 +1171,7 @@ function EventEditor({ date, event, copiedContent, googleAccounts, onClose, onSa
             <div className="color-row">
               <span>背景色</span><div className="color-options">{EVENT_COLORS.map((color) => <button type="button" key={color} className={draft.style.color === color ? "color-dot active" : "color-dot"} style={{ background: color }} onClick={() => patchStyle("color", color)} aria-label={`背景色 ${color}`} />)}</div>
             </div>
-            <div className="event-preview" style={styleForEvent(draft.style)}><span>{draft.recurrence ? `${recurrenceLabel(draft.recurrence)}・${draft.allDay ? "終日" : draft.startTime}` : draft.allDay ? "終日" : draft.startTime}</span>{draft.title || "予定のプレビュー"}</div>
+            <div className="event-preview" style={styleForEvent(draft.style)}><span>{draft.recurrence ? `${recurrenceLabel(draft.recurrence)}・${formatEventPeriod(draft)}` : formatEventPeriod(draft)}</span>{draft.title || "予定のプレビュー"}</div>
           </fieldset>
           {error && <p className="form-error" role="alert">{error}</p>}
         </div>

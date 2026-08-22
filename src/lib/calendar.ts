@@ -69,10 +69,18 @@ function utcDayNumber(dateKey: string): number {
   return Math.floor(Date.UTC(year, month - 1, day) / 86_400_000);
 }
 
-function addDays(dateKey: string, amount: number): string {
+export function addDays(dateKey: string, amount: number): string {
   const [year, month, day] = dateKey.split("-").map(Number);
   const date = new Date(Date.UTC(year, month - 1, day + amount));
   return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`;
+}
+
+export function daysBetween(startDate: string, endDate: string): number {
+  return Math.max(0, utcDayNumber(endDate) - utcDayNumber(startDate));
+}
+
+function eventIncludesDate(event: CalendarEvent, dateKey: string): boolean {
+  return event.date <= dateKey && dateKey <= event.endDate;
 }
 
 function monthsBetween(start: string, target: string): number {
@@ -193,21 +201,35 @@ export function eventsForDate(events: CalendarEvent[], dateKey: string): Calenda
     ? [`${event.recurrenceException.masterId}:${event.recurrenceException.originalDate}`]
     : []));
   return sortEvents(events.flatMap((event) => {
-    if (event.recurrenceException) return event.date === dateKey ? [event] : [];
-    if (!event.recurrence) return event.date === dateKey ? [event] : [];
-    if (exceptionKeys.has(`${event.id}:${dateKey}`)) return [];
-    if (recurrenceMatches(event, dateKey)) {
-      return [{ ...event, date: dateKey, occurrence: { masterId: event.id, originalDate: dateKey } }];
+    if (event.recurrenceException) return eventIncludesDate(event, dateKey) ? [event] : [];
+    if (!event.recurrence) return eventIncludesDate(event, dateKey) ? [event] : [];
+    const durationDays = daysBetween(event.date, event.endDate);
+    const occurrences: CalendarEvent[] = [];
+    for (let offset = 0; offset <= durationDays; offset += 1) {
+      const occurrenceDate = addDays(dateKey, -offset);
+      if (exceptionKeys.has(`${event.id}:${occurrenceDate}`) || !recurrenceMatches(event, occurrenceDate)) continue;
+      occurrences.push({
+        ...event,
+        date: occurrenceDate,
+        endDate: addDays(occurrenceDate, durationDays),
+        occurrence: { masterId: event.id, originalDate: occurrenceDate },
+      });
     }
-    return [];
+    return occurrences;
   }));
 }
 
 export function upcomingEvents(events: CalendarEvent[], today = new Date(), days = 7): CalendarEvent[] {
   const occurrences: CalendarEvent[] = [];
+  const seen = new Set<string>();
   for (let offset = 0; offset <= days; offset += 1) {
     const date = new Date(today.getFullYear(), today.getMonth(), today.getDate() + offset);
-    occurrences.push(...eventsForDate(events, toDateKey(date)));
+    for (const event of eventsForDate(events, toDateKey(date))) {
+      const key = `${event.id}:${event.occurrence?.originalDate ?? event.recurrenceException?.originalDate ?? event.date}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      occurrences.push(event);
+    }
   }
   return sortEvents(occurrences);
 }
@@ -220,9 +242,19 @@ export function formatEventTime(event: CalendarEvent): string {
   return event.allDay ? "終日" : event.startTime;
 }
 
+export function formatEventPeriod(event: CalendarEvent): string {
+  if (event.endDate > event.date) {
+    const start = `${Number(event.date.slice(5, 7))}/${Number(event.date.slice(8, 10))}`;
+    const end = `${Number(event.endDate.slice(5, 7))}/${Number(event.endDate.slice(8, 10))}`;
+    return event.allDay ? `${start}～${end}・終日` : `${start} ${event.startTime}～${end} ${event.endTime}`;
+  }
+  return event.allDay ? "終日" : `${event.startTime}～${event.endTime}`;
+}
+
 export function copyEventContent(event: CalendarEvent): EventContent {
   return {
     title: event.title,
+    durationDays: daysBetween(event.date, event.endDate),
     annual: event.annual,
     recurrence: event.recurrence ? structuredClone(event.recurrence) : null,
     allDay: event.allDay,
@@ -235,17 +267,21 @@ export function copyEventContent(event: CalendarEvent): EventContent {
 }
 
 export function pasteEventContent(target: CalendarEvent, content: EventContent): CalendarEvent {
+  const { durationDays, ...fields } = content;
   return {
     ...target,
-    ...content,
+    ...fields,
+    endDate: addDays(target.date, durationDays),
     style: { ...content.style },
   };
 }
 
 export function moveEventToDate(event: CalendarEvent, targetDate: string, updatedAt: string): CalendarEvent {
+  const durationDays = daysBetween(event.date, event.endDate);
   return {
     ...event,
     date: targetDate,
+    endDate: addDays(targetDate, durationDays),
     occurrence: undefined,
     updatedAt,
   };
@@ -257,10 +293,12 @@ export function duplicateEventToDate(
   id: string,
   createdAt: string,
 ): CalendarEvent {
+  const durationDays = daysBetween(event.date, event.endDate);
   return {
     ...event,
     id,
     date: targetDate,
+    endDate: addDays(targetDate, durationDays),
     occurrence: undefined,
     recurrenceException: null,
     googleLinks: [],
@@ -274,4 +312,20 @@ export function duplicateEventToDate(
 
 export function isValidTimeRange(startTime: string, endTime: string): boolean {
   return Boolean(startTime && endTime && startTime < endTime);
+}
+
+export function isValidEventRange(event: Pick<CalendarEvent, "date" | "endDate" | "allDay" | "startTime" | "endTime">): boolean {
+  if (!event.date || !event.endDate || event.endDate < event.date) return false;
+  if (event.allDay || event.endDate > event.date) return true;
+  return isValidTimeRange(event.startTime, event.endTime);
+}
+
+export function endTimeOneHourAfter(startTime: string): string {
+  const match = /^(\d{2}):(\d{2})$/.exec(startTime);
+  if (!match) return "";
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours > 23 || minutes > 59) return "";
+  const totalMinutes = (hours * 60 + minutes + 60) % (24 * 60);
+  return `${String(Math.floor(totalMinutes / 60)).padStart(2, "0")}:${String(totalMinutes % 60).padStart(2, "0")}`;
 }

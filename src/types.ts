@@ -79,6 +79,7 @@ export interface CalendarEvent {
   id: string;
   title: string;
   date: string;
+  endDate: string;
   annual: boolean;
   recurrence: EventRecurrence | null;
   recurrenceException: RecurrenceException | null;
@@ -100,7 +101,7 @@ export interface CalendarEvent {
 export type EventContent = Pick<
   CalendarEvent,
   "title" | "annual" | "recurrence" | "allDay" | "startTime" | "endTime" | "location" | "notes" | "style"
->;
+> & { durationDays: number };
 
 export interface DeletedCalendarEvent extends CalendarEvent {
   deletedAt: string;
@@ -176,6 +177,7 @@ export function createEmptyEvent(id: string, date: string, timestamp: string): C
     id,
     title: "",
     date,
+    endDate: date,
     annual: false,
     recurrence: null,
     recurrenceException: null,

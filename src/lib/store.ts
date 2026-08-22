@@ -41,8 +41,12 @@ function normalizeRecurrence(event: Partial<CalendarEvent>): EventRecurrence | n
 function normalizeEvent(value: unknown): CalendarEvent {
   const event = value as Partial<CalendarEvent>;
   const recurrence = normalizeRecurrence(event);
+  const date = event.date ?? "";
+  const endDate = event.endDate && event.endDate >= date ? event.endDate : date;
   return {
     ...(event as CalendarEvent),
+    date,
+    endDate,
     annual: recurrence?.kind === "simple" && recurrence.frequency === "yearly",
     recurrence,
     recurrenceException: event.recurrenceException ?? null,
