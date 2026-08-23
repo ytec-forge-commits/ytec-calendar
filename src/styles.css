@@ -609,6 +609,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   .event-time { display: none; }
 }
 
+@media (max-width: 880px) {
+  .top-actions > .primary-button { width: 40px; padding: 0; }
+  .top-actions > .primary-button .action-label { display: none; }
+}
+
 @media (max-width: 800px) {
   .app-shell { padding: 10px; }
   .topbar { height: 64px; margin-bottom: 10px; grid-template-columns: auto 1fr auto; padding: 0 12px; border-radius: 16px; }
