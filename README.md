@@ -4,7 +4,7 @@
 
 Koyomadoは、Windowsのデスクトップへウィジェットのように置いて使える、シンプルなポータブル型カレンダーです。予定と設定は実行ファイル横へ保存され、フォルダーごとUSBメモリやGoogle Driveへ移動できます。
 
-- 公式ページ: https://ytec.cloudfree.jp/ytb/koyomado/
+- 公式ページ: https://ytec.cloudfree.jp/forge/projects/koyomado/
 - 対応OS: Windows 10 / 11（64bit）
 - ライセンス: Apache License 2.0
 

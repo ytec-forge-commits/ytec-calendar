@@ -31,7 +31,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ASSET_DIR = ROOT / "docs" / "manual-assets"
 VERSION = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))["version"]
 RELEASE_DATE = "2026年8月23日"
-OFFICIAL_URL = "https://ytec.cloudfree.jp/ytb/koyomado/"
+OFFICIAL_URL = "https://ytec.cloudfree.jp/forge/projects/koyomado/"
 SOURCE_URL = "https://github.com/ytec-forge-commits/ytec-calendar"
 GOOGLE_CONSOLE_URL = "https://console.cloud.google.com/"
 GOOGLE_PROJECT_CREATE_URL = "https://console.cloud.google.com/projectcreate"

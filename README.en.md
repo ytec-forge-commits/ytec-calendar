@@ -4,7 +4,7 @@
 
 Koyomado is a simple portable calendar for Windows that can sit on your desktop like a widget. Events and settings are stored next to the executable, so you can move the entire folder between computers on a USB drive or through Google Drive.
 
-- Official website: https://ytec.cloudfree.jp/ytb/koyomado/
+- Official website: https://ytec.cloudfree.jp/forge/en/projects/koyomado/
 - Supported operating systems: Windows 10 / 11 (64-bit)
 - License: Apache License 2.0
 

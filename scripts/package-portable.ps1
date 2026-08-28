@@ -60,7 +60,7 @@ try {
         $signatureNote
         ""
         "操作説明書: Koyomado操作説明書.pdf"
-        "公式ページ: https://ytec.cloudfree.jp/ytb/koyomado/"
+        "公式ページ: https://ytec.cloudfree.jp/forge/projects/koyomado/"
         "利用条件: LICENSE.txt / NOTICE"
         "プライバシー: PRIVACY.md"
         "コード署名方針: CODE_SIGNING_POLICY.md"
