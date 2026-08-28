@@ -32,7 +32,7 @@ ASSET_DIR = ROOT / "docs" / "manual-assets"
 VERSION = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))["version"]
 RELEASE_DATE = "2026年8月23日"
 OFFICIAL_URL = "https://ytec.cloudfree.jp/ytb/koyomado/"
-SOURCE_URL = "https://github.com/ytec-commits/ytec-calendar"
+SOURCE_URL = "https://github.com/ytec-forge-commits/ytec-calendar"
 GOOGLE_CONSOLE_URL = "https://console.cloud.google.com/"
 GOOGLE_PROJECT_CREATE_URL = "https://console.cloud.google.com/projectcreate"
 GOOGLE_CALENDAR_API_URL = "https://console.cloud.google.com/apis/library/calendar-json.googleapis.com"
