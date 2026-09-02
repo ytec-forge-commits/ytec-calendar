@@ -2,7 +2,7 @@
 
 [日本語](README.md) | English
 
-Koyomado is a simple portable calendar for Windows that can sit on your desktop like a widget. Events and settings are stored next to the executable, so you can move the entire folder between computers on a USB drive or through Google Drive.
+Koyomado is a simple Windows calendar that can sit on your desktop like a widget. It is distributed as a Microsoft Store app for general use and as a portable folder that can be carried on USB storage or Google Drive.
 
 - Official website: https://ytec.cloudfree.jp/forge/en/projects/koyomado/
 - Supported operating systems: Windows 10 / 11 (64-bit)
@@ -34,14 +34,14 @@ Koyomado does not include printing, PDF export, advertising, analytics, or a pro
 
 ## Getting started
 
-1. Extract the distribution ZIP to the location where you intend to keep it.
-2. Run `koyomado.exe`.
+1. Install the Microsoft Store edition from the Store. For the portable edition, extract the ZIP where you intend to keep it.
+2. Launch the Store edition from the Start menu, or run `koyomado.exe` for the portable edition.
 3. Open the gear menu in the upper-right corner and configure the display mode and Windows startup behavior.
 4. Move and resize the window as desired. Koyomado will restore that placement the next time it starts with the same monitor configuration.
 
 The default mode shows Koyomado only on the taskbar, and the close button exits the application. In “system tray only” or “both” mode, closing or minimizing hides the window; use “Exit” from the tray menu to quit completely.
 
-When Windows startup is enabled, Koyomado waits up to five minutes after sign-in for its executable to become available. This improves reliability on computers where Google Drive starts slowly. Before moving the application folder, turn startup off, then turn it on again after the move.
+The Microsoft Store edition uses a Windows StartupTask. If Windows disables it, enable Koyomado under Settings > Apps > Startup. The portable edition continues to wait up to five minutes after sign-in for its executable to become available, which helps on computers where Google Drive starts slowly. Before moving the portable folder, turn startup off, then turn it on again after the move.
 
 ## Start and end times and multi-day events
 
@@ -73,9 +73,20 @@ The illustrated manual on the official website and in the distribution ZIP expla
 
 The JSON file containing the complete client secret can be downloaded when the OAuth client is created. After importing it into Koyomado, keep the original JSON private and back it up in a safe location. If it is lost, the simplest recovery is to rotate the client secret in Google Auth Platform and download a new JSON file. If rotation is unavailable, create a new Desktop client.
 
-Event data and synchronization settings are stored in JSON next to the executable, but Google refresh tokens are stored in Windows Credential Manager. When moving the application folder to another computer, reauthorize each Google account on that computer. See the [privacy policy](PRIVACY.md) for details.
+Event data and synchronization settings are stored in the data folder for the edition in use, while Google refresh tokens are stored in Windows Credential Manager. When moving the portable edition to another computer, reauthorize each Google account on that computer. See the [privacy policy](PRIVACY.md) for details.
 
-## Portable data
+## Data storage and distribution channels
+
+| Edition | Data location | Updates | Signing |
+| --- | --- | --- | --- |
+| Microsoft Store | `%LOCALAPPDATA%\Packages\Y-TEC.Koyomado_y7q84f7nwz24j\LocalState\Koyomado\data` | Microsoft Store | Microsoft Store distribution signature |
+| Portable | `data` next to `koyomado.exe` | Extract the new ZIP and preserve the existing `data` | Y-TEC self-signature plus published SHA-256 |
+
+The editions use separate data locations. To switch, exit both editions, launch and exit the Store edition once, then copy the contents of the old `data` folder to the new location. Keep the source as a backup until events, settings, and custom sounds have been verified. Do not run both editions at the same time; this can duplicate Google synchronization and reminders. On the same PC they share Google refresh tokens in Windows Credential Manager, so disconnecting an account in one edition requires reauthorization in the other.
+
+Store-edition data is held in the package `LocalState`. Store updates normally retain it, but uninstalling the app can remove it. Before uninstalling or resetting Windows, exit Koyomado and copy the Store `data` folder to a separate backup location. Portable data remains next to the executable unless it is overwritten during a ZIP update.
+
+### Contents of the data folder
 
 - `data/calendar-data.json`: events, recurrence, appearance, and Google integration settings
 - `data/calendar-data.backup.json`: the previous saved state
@@ -112,6 +123,8 @@ Use `npm run dev` to inspect only the web interface. The browser build stores sy
 npm run lint
 npm test
 npm run build
+npm run test:windows-signing-policy
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-partner-center-submission.ps1 -SkipArtifactHashCheck
 Push-Location src-tauri
 cargo test --locked
 cargo clippy --locked --all-targets -- -D warnings
@@ -121,7 +134,30 @@ npm run tauri:build
 
 Integration tests with real Google accounts must use the user's own test OAuth client and synthetic events only. Never include an OAuth client JSON file or token in Git, logs, or Issues.
 
-### Portable ZIP
+### Microsoft Store MSIX
+
+MSIX packaging uses MakeAppx from the Windows SDK. Use the exact Package Identity assigned by Partner Center.
+
+```powershell
+npm run tauri:build
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-msix.ps1 -SkipBuild -PackageVersion 1.0.0.0 -CreateUpload
+npm run test:store-submission
+```
+
+Do not self-sign the Store submission package. Partner Center applies the Store signature. The command creates `release/koyomado-v<version>-store-x64.msixupload`.
+
+### Self-signed portable ZIP
+
+The self-signed certificate is created as a non-exportable private key in `CurrentUser\My`; no PFX or private key is placed in the workspace. The release script signs a staging copy of the executable and packages only that verified copy.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/new-self-signed-code-signing-certificate.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-self-signed-direct.ps1 -CertificateThumbprint <shown-thumbprint>
+```
+
+This produces the portable ZIP, a public-key-only `.cer`, the manual, and `SHA256SUMS.txt`. The signature receives an RFC 3161 timestamp. A self-signature does not guarantee that SmartScreen warnings disappear. No certificate is automatically added to a user's Trusted Root store.
+
+For development only, the following command creates an unsigned ZIP. Do not publish it as the signed release.
 
 ```powershell
 npm run tauri:portable
@@ -137,6 +173,6 @@ This creates `release/koyomado-v<version>-windows-portable.zip`. When updating a
 - [Contribution guide](CONTRIBUTING.md)
 - [Third-party licenses](THIRD_PARTY_NOTICES.md)
 
-GitHub Releases and the official website state whether each distribution is signed or unsigned. Verify the SHA-256 checksum before running an unsigned build. Code-signing operations follow the [code signing policy](CODE_SIGNING_POLICY.md).
+GitHub Releases and the official website distinguish the Microsoft Store and self-signed portable editions and state their signing, update, and storage behavior. Verify the published SHA-256 checksums. Code-signing operations follow the [code signing policy](CODE_SIGNING_POLICY.md).
 
 Copyright 2026 Y-TEC. Licensed under the Apache License, Version 2.0.

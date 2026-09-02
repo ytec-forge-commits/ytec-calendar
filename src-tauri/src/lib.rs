@@ -13,6 +13,11 @@ use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Manager, PhysicalPosition, PhysicalSize, WindowEvent,
 };
+#[cfg(windows)]
+use windows::{
+    core::HSTRING,
+    ApplicationModel::{StartupTask, StartupTaskState},
+};
 
 mod credentials;
 mod google;
@@ -24,6 +29,7 @@ const MIN_WINDOW_HEIGHT: u32 = 600;
 const EXPANDED_MIN_WINDOW_WIDTH: u32 = 806;
 const COLLAPSED_MIN_WINDOW_WIDTH: u32 = 375;
 const AUTOSTART_ENTRY_NAME: &str = "Koyomado";
+const PACKAGED_AUTOSTART_TASK_ID: &str = "KoyomadoStartup";
 static APP_DATA_LOCK: Mutex<()> = Mutex::new(());
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -531,13 +537,123 @@ struct TrackedWindow {
 struct WindowTracker(Mutex<TrackedWindow>);
 struct DisplayModeState(Mutex<WindowDisplayMode>);
 
-fn portable_data_dir() -> Result<PathBuf, String> {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum StartupBackend {
+    Packaged,
+    Portable,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct RuntimeProfile {
+    data_dir: PathBuf,
+    startup_backend: StartupBackend,
+}
+
+fn runtime_profile(
+    packaged: bool,
+    current_exe: &Path,
+    package_local_state: Option<&Path>,
+) -> Result<RuntimeProfile, String> {
+    let (data_dir, startup_backend) = if packaged {
+        let package_local_state = package_local_state
+            .ok_or_else(|| "Windowsのパッケージ用LocalStateを確認できません".to_string())?;
+        let is_local_state = package_local_state
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.eq_ignore_ascii_case("LocalState"));
+        if !is_local_state {
+            return Err(
+                "Microsoft Store版の保存先がパッケージ用LocalStateではありません".to_string(),
+            );
+        }
+        (
+            package_local_state.join("Koyomado").join("data"),
+            StartupBackend::Packaged,
+        )
+    } else {
+        let parent = current_exe
+            .parent()
+            .ok_or_else(|| "実行ファイルの親フォルダーがありません".to_string())?;
+        (parent.join("data"), StartupBackend::Portable)
+    };
+
+    Ok(RuntimeProfile {
+        data_dir,
+        startup_backend,
+    })
+}
+
+#[cfg(windows)]
+fn current_process_has_package_identity() -> Result<bool, String> {
+    use windows_sys::Win32::{
+        Foundation::{APPMODEL_ERROR_NO_PACKAGE, ERROR_INSUFFICIENT_BUFFER},
+        Storage::Packaging::Appx::GetCurrentPackageFullName,
+    };
+
+    let mut package_full_name_length = 0;
+    // パッケージ名そのものは読み取らず、ログにも出力しない。
+    let status =
+        unsafe { GetCurrentPackageFullName(&mut package_full_name_length, std::ptr::null_mut()) };
+    match status {
+        ERROR_INSUFFICIENT_BUFFER | 0 => Ok(true),
+        APPMODEL_ERROR_NO_PACKAGE => Ok(false),
+        error => Err(format!(
+            "Windowsのパッケージ識別情報を確認できません: {error}"
+        )),
+    }
+}
+
+#[cfg(not(windows))]
+fn current_process_has_package_identity() -> Result<bool, String> {
+    Ok(false)
+}
+
+fn current_startup_backend() -> Result<StartupBackend, String> {
+    if current_process_has_package_identity()? {
+        Ok(StartupBackend::Packaged)
+    } else {
+        Ok(StartupBackend::Portable)
+    }
+}
+
+#[cfg(windows)]
+fn current_package_local_state() -> Result<PathBuf, String> {
+    use windows::Storage::ApplicationData;
+
+    let application_data = ApplicationData::Current()
+        .map_err(|error| format!("Windowsのパッケージ保存領域を取得できません: {error}"))?;
+    let local_folder = application_data
+        .LocalFolder()
+        .map_err(|error| format!("WindowsのLocalStateフォルダーを取得できません: {error}"))?;
+    let path = local_folder
+        .Path()
+        .map_err(|error| format!("WindowsのLocalStateパスを取得できません: {error}"))?;
+    Ok(PathBuf::from(path.to_string()))
+}
+
+#[cfg(not(windows))]
+fn current_package_local_state() -> Result<PathBuf, String> {
+    Err("このOSではMicrosoft Store版の保存領域を取得できません".to_string())
+}
+
+fn current_runtime_profile() -> Result<RuntimeProfile, String> {
     let executable = std::env::current_exe()
         .map_err(|error| format!("実行ファイルの場所を確認できません: {error}"))?;
-    let parent = executable
-        .parent()
-        .ok_or_else(|| "実行ファイルの親フォルダーがありません".to_string())?;
-    Ok(parent.join("data"))
+    let startup_backend = current_startup_backend()?;
+    let package_local_state = if startup_backend == StartupBackend::Packaged {
+        Some(current_package_local_state()?)
+    } else {
+        None
+    };
+    runtime_profile(
+        startup_backend == StartupBackend::Packaged,
+        &executable,
+        package_local_state.as_deref(),
+    )
+}
+
+fn portable_data_dir() -> Result<PathBuf, String> {
+    current_runtime_profile().map(|profile| profile.data_dir)
 }
 
 fn auto_start_script_path() -> Result<PathBuf, String> {
@@ -595,6 +711,127 @@ fn auto_start_manager(script_path: &Path) -> AutoLaunch {
     AutoLaunch::new(AUTOSTART_ENTRY_NAME, "wscript.exe", &[script_argument])
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PackagedStartupState {
+    Disabled,
+    DisabledByUser,
+    Enabled,
+    DisabledByPolicy,
+    EnabledByPolicy,
+    Unknown,
+}
+
+fn packaged_startup_state_is_enabled(state: PackagedStartupState) -> Result<bool, String> {
+    match state {
+        PackagedStartupState::Disabled => Ok(false),
+        PackagedStartupState::DisabledByUser => Err(
+            "Windowsの「スタートアップ アプリ」設定またはタスク マネージャーで、Koyomadoの自動起動がユーザーにより無効化されています。Windows側で有効にしてください。".into(),
+        ),
+        PackagedStartupState::Enabled | PackagedStartupState::EnabledByPolicy => Ok(true),
+        PackagedStartupState::DisabledByPolicy => Err(
+            "Windowsのポリシーまたはこのデバイスの設定により、Koyomadoの自動起動は無効化されています。管理者に確認してください。".into(),
+        ),
+        PackagedStartupState::Unknown => {
+            Err("Windowsの自動起動の状態を確認できません。".into())
+        }
+    }
+}
+
+#[cfg(windows)]
+fn packaged_startup_state_from_windows(state: StartupTaskState) -> PackagedStartupState {
+    if state == StartupTaskState::Disabled {
+        PackagedStartupState::Disabled
+    } else if state == StartupTaskState::DisabledByUser {
+        PackagedStartupState::DisabledByUser
+    } else if state == StartupTaskState::Enabled {
+        PackagedStartupState::Enabled
+    } else if state == StartupTaskState::DisabledByPolicy {
+        PackagedStartupState::DisabledByPolicy
+    } else if state == StartupTaskState::EnabledByPolicy {
+        PackagedStartupState::EnabledByPolicy
+    } else {
+        PackagedStartupState::Unknown
+    }
+}
+
+#[cfg(windows)]
+fn packaged_startup_task() -> Result<StartupTask, String> {
+    StartupTask::GetAsync(&HSTRING::from(PACKAGED_AUTOSTART_TASK_ID))
+        .map_err(|error| format!("MSIX版の自動起動設定を確認できません: {error}"))?
+        .get()
+        .map_err(|error| format!("MSIX版の自動起動設定を確認できません: {error}"))
+}
+
+#[cfg(windows)]
+fn packaged_startup_state(task: &StartupTask) -> Result<PackagedStartupState, String> {
+    task.State()
+        .map(packaged_startup_state_from_windows)
+        .map_err(|error| format!("MSIX版の自動起動状態を確認できません: {error}"))
+}
+
+#[cfg(windows)]
+fn get_packaged_auto_start_state() -> Result<bool, String> {
+    let task = packaged_startup_task()?;
+    packaged_startup_state_is_enabled(packaged_startup_state(&task)?)
+}
+
+#[cfg(windows)]
+fn install_packaged_auto_start() -> Result<(), String> {
+    let task = packaged_startup_task()?;
+    match packaged_startup_state_is_enabled(packaged_startup_state(&task)?)? {
+        true => Ok(()),
+        false => {
+            let requested_state = task
+                .RequestEnableAsync()
+                .map_err(|error| format!("MSIX版の自動起動を要求できません: {error}"))?
+                .get()
+                .map_err(|error| format!("MSIX版の自動起動を要求できません: {error}"))?;
+            match packaged_startup_state_is_enabled(packaged_startup_state_from_windows(
+                requested_state,
+            ))? {
+                true => Ok(()),
+                false => Err("Windowsの自動起動を有効にできませんでした。".into()),
+            }
+        }
+    }
+}
+
+#[cfg(windows)]
+fn disable_packaged_auto_start() -> Result<(), String> {
+    let task = packaged_startup_task()?;
+    let state = packaged_startup_state(&task)?;
+    match packaged_startup_state_is_enabled(state)? {
+        false => Ok(()),
+        true if state == PackagedStartupState::EnabledByPolicy => Err(
+            "WindowsのポリシーによりKoyomadoの自動起動は有効です。アプリから変更できません。"
+                .into(),
+        ),
+        true => {
+            task.Disable()
+                .map_err(|error| format!("MSIX版の自動起動を解除できません: {error}"))?;
+            match packaged_startup_state_is_enabled(packaged_startup_state(&task)?)? {
+                false => Ok(()),
+                true => Err("Windowsの自動起動を無効にできませんでした。".into()),
+            }
+        }
+    }
+}
+
+#[cfg(not(windows))]
+fn get_packaged_auto_start_state() -> Result<bool, String> {
+    Err("MSIX版の自動起動はWindowsでのみ利用できます。".into())
+}
+
+#[cfg(not(windows))]
+fn install_packaged_auto_start() -> Result<(), String> {
+    Err("MSIX版の自動起動はWindowsでのみ利用できます。".into())
+}
+
+#[cfg(not(windows))]
+fn disable_packaged_auto_start() -> Result<(), String> {
+    Err("MSIX版の自動起動はWindowsでのみ利用できます。".into())
+}
+
 fn install_resilient_auto_start() -> Result<(), String> {
     let target = std::env::current_exe()
         .map_err(|error| format!("自動起動するファイルの場所を確認できません: {error}"))?;
@@ -614,6 +851,9 @@ fn install_resilient_auto_start() -> Result<(), String> {
 
 #[tauri::command]
 fn get_auto_start_state() -> Result<bool, String> {
+    if current_startup_backend()? == StartupBackend::Packaged {
+        return get_packaged_auto_start_state();
+    }
     let script_path = auto_start_script_path()?;
     auto_start_manager(&script_path)
         .is_enabled()
@@ -622,11 +862,21 @@ fn get_auto_start_state() -> Result<bool, String> {
 
 #[tauri::command]
 fn repair_auto_start() -> Result<(), String> {
-    install_resilient_auto_start()
+    match current_startup_backend()? {
+        StartupBackend::Packaged => install_packaged_auto_start(),
+        StartupBackend::Portable => install_resilient_auto_start(),
+    }
 }
 
 #[tauri::command]
 fn set_auto_start_state(enabled: bool) -> Result<(), String> {
+    if current_startup_backend()? == StartupBackend::Packaged {
+        return if enabled {
+            install_packaged_auto_start()
+        } else {
+            disable_packaged_auto_start()
+        };
+    }
     let script_path = auto_start_script_path()?;
     let manager = auto_start_manager(&script_path);
     if enabled {
@@ -1819,6 +2069,76 @@ mod tests {
             backup_path(&path),
             PathBuf::from("data/calendar-data.backup.json")
         );
+    }
+
+    #[test]
+    fn packaged_runtime_profile_uses_package_local_state_and_startup_task() {
+        let profile = runtime_profile(
+            true,
+            Path::new(r"C:\\Program Files\\WindowsApps\\Koyomado\\koyomado.exe"),
+            Some(Path::new(
+                r"C:\\Users\\Example\\AppData\\Local\\Packages\\Y-TEC.Koyomado_y7q84f7nwz24j\\LocalState",
+            )),
+        )
+        .expect("packaged apps should use their package LocalState directory");
+
+        assert_eq!(
+            profile.data_dir,
+            PathBuf::from(
+                r"C:\\Users\\Example\\AppData\\Local\\Packages\\Y-TEC.Koyomado_y7q84f7nwz24j\\LocalState\\Koyomado\\data",
+            )
+        );
+        assert_eq!(profile.startup_backend, StartupBackend::Packaged);
+    }
+
+    #[test]
+    fn packaged_runtime_profile_rejects_unscoped_local_app_data() {
+        let error = runtime_profile(
+            true,
+            Path::new(r"C:\\Program Files\\WindowsApps\\Koyomado\\koyomado.exe"),
+            Some(Path::new(r"C:\\Users\\Example\\AppData\\Local")),
+        )
+        .expect_err("packaged apps must not write through virtualized AppData paths");
+
+        assert!(error.contains("LocalState"));
+    }
+
+    #[test]
+    fn packaged_runtime_profile_keeps_unpacked_data_adjacent_and_vbs_backend() {
+        let profile = runtime_profile(
+            false,
+            Path::new(r"D:\\Portable\\Koyomado\\koyomado.exe"),
+            Some(Path::new(r"C:\\Users\\Example\\AppData\\Local")),
+        )
+        .expect("portable apps should keep their data next to the executable");
+
+        assert_eq!(
+            profile.data_dir,
+            PathBuf::from(r"D:\\Portable\\Koyomado\\data")
+        );
+        assert_eq!(profile.startup_backend, StartupBackend::Portable);
+    }
+
+    #[test]
+    fn packaged_runtime_startup_state_reports_user_and_policy_blocks() {
+        assert_eq!(
+            packaged_startup_state_is_enabled(PackagedStartupState::Disabled),
+            Ok(false)
+        );
+        assert_eq!(
+            packaged_startup_state_is_enabled(PackagedStartupState::Enabled),
+            Ok(true)
+        );
+
+        let user_error = packaged_startup_state_is_enabled(PackagedStartupState::DisabledByUser)
+            .expect_err("a user-disabled task must not be reported as enabled");
+        assert!(user_error.contains("ユーザー"));
+        assert!(user_error.contains("スタートアップ"));
+
+        let policy_error =
+            packaged_startup_state_is_enabled(PackagedStartupState::DisabledByPolicy)
+                .expect_err("a policy-disabled task must not be reported as enabled");
+        assert!(policy_error.contains("ポリシー"));
     }
 
     #[test]

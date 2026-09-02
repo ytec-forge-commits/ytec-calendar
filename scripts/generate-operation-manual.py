@@ -30,7 +30,7 @@ from reportlab.platypus import (
 ROOT = Path(__file__).resolve().parents[1]
 ASSET_DIR = ROOT / "docs" / "manual-assets"
 VERSION = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))["version"]
-RELEASE_DATE = "2026年8月23日"
+RELEASE_DATE = "2026年9月2日"
 OFFICIAL_URL = "https://ytec.cloudfree.jp/forge/projects/koyomado/"
 SOURCE_URL = "https://github.com/ytec-forge-commits/ytec-calendar"
 GOOGLE_CONSOLE_URL = "https://console.cloud.google.com/"
@@ -553,33 +553,34 @@ def build_story(styles: dict[str, ParagraphStyle]) -> list:
         Spacer(1, 4 * mm),
         logo,
         Spacer(1, 5 * mm),
-        p("WINDOWS PORTABLE CALENDAR", styles["cover_kicker"]),
+        p("WINDOWS DESKTOP CALENDAR", styles["cover_kicker"]),
         p("Koyomado 操作説明書", styles["cover_title"]),
         p("予定を、いつでも目に入る場所へ。<br/>デスクトップにそっと置いて使える、シンプルな月カレンダーです。", styles["cover_subtitle"]),
         screenshot("calendar-v1.png", 156 * mm),
         Spacer(1, 6 * mm),
         two_cards([
-            ("対応環境", "Windows 10 / 11（64bit）<br/>インストール不要"),
-            ("この説明書", f"Koyomado v{VERSION}<br/>{RELEASE_DATE}・署名前ベータ版"),
-            ("保存と通信", "予定はアプリ横へ保存<br/>Google連携は任意・初期OFF"),
+            ("対応環境", "Windows 10 / 11（64bit）<br/>Store版・ポータブル版"),
+            ("この説明書", f"Koyomado v{VERSION}<br/>{RELEASE_DATE}"),
+            ("保存と通信", "保存先は版ごとに分離<br/>Google連携は任意・初期OFF"),
         ], styles, [PURPLE_PALE, GREEN_PALE, SKY_PALE]),
         Spacer(1, 5 * mm),
         p(f'<link href="{OFFICIAL_URL}" color="#5f5278">公式ページ: {OFFICIAL_URL}</link>', styles["link"]),
+        p(f'<link href="{SOURCE_URL}" color="#5f5278">ソースコード: {SOURCE_URL}</link>', styles["link"]),
         PageBreak(),
     ])
 
     # 2: quick start
-    page_title(story, styles, "GETTING STARTED", "はじめに - 4ステップで使い始める", "Koyomadoはインストーラーを使わないポータブルアプリです。ZIPを展開したフォルダーが、そのままアプリ本体と保存場所になります。")
+    page_title(story, styles, "GETTING STARTED", "はじめに - 4ステップで使い始める", "一般利用にはMicrosoft Store版、持ち運びには直接配布のポータブル版を選べます。予定機能は共通です。")
     story.extend([
-        step(1, "ZIPをすべて展開", "ダウンロードしたZIPを右クリックし、Windowsの「すべて展開」を選びます。ZIPの中から直接起動せず、先に展開してください。", styles),
-        step(2, "置き場所を決める", "展開したKoyomadoフォルダーを、ドキュメント、USBメモリ、Google Driveなど今後使う場所へ移します。自動起動をONにした後の移動は避けてください。", styles),
-        step(3, "koyomado.exeを起動", "初回起動時、Windowsの警告が出る場合があります。公式ページから入手したファイルであることとSHA-256を確認し、不安がある場合は実行しないでください。", styles),
+        step(1, "配布方法を選ぶ", "Microsoft Storeでは「インストール」を選びます。直接配布版はZIPを右クリックして「すべて展開」し、ZIPの中から直接起動しないでください。", styles),
+        step(2, "Koyomadoを起動", "Store版はスタートメニューから起動します。ポータブル版は、展開したkoyomado.exeを起動します。", styles),
+        step(3, "ポータブル版だけ置き場所を決める", "USBメモリやGoogle Driveへ持ち運ぶ場合は、自動起動をONにする前にKoyomadoフォルダーを今後使う場所へ移します。", styles),
         step(4, "位置と起動方法を整える", "画面を好きな位置とサイズに調整します。右上の歯車から、必要な場合だけ「Windows起動時に自動起動」をONにします。", styles),
         Spacer(1, 4 * mm),
         card("標準はタスクバーだけに表示", "初期設定では通常のWindowsアプリと同じく、最小化するとタスクバーへ残り、右上の×で終了します。歯車から「タスクトレイのみ」または「両方」へ変更できます。", styles, GREEN_PALE),
         Spacer(1, 4 * mm),
-        p("Windowsの警告について", styles["h2"]),
-        p(f"v{VERSION}はコード署名前のベータ版です。SmartScreenなどの警告は、危険と確定したという意味ではなく、発行元を署名で確認できない場合にも表示されます。公式ページ掲載のSHA-256とダウンロードしたZIPの値を照合し、入手元を確認してください。", styles["body"]),
+        p("署名とWindowsの警告について", styles["h2"]),
+        p("Store版はMicrosoft Storeの配布署名を使用します。直接配布版はY-TECの自己署名、RFC 3161タイムスタンプ、SHA-256を付けますが、自己署名はSmartScreen警告をなくす保証ではありません。公式ページから入手し、署名者とSHA-256を確認してください。公開鍵ファイルを信頼済みルートへ登録する必要はありません。", styles["body"]),
         p("PowerShellで確認する場合", styles["h3"]),
         p(f"Get-FileHash .\\koyomado-v{VERSION}-windows-portable.zip -Algorithm SHA256", styles["code"]),
         PageBreak(),
@@ -756,8 +757,9 @@ def build_story(styles: dict[str, ParagraphStyle]) -> list:
         Spacer(1, 5 * mm),
         p("Windows起動時に自動起動", styles["h2"]),
         step(1, "右上の歯車を開く", "「表示と起動の設定」を開きます。", styles),
-        step(2, "自動起動をON", "「Windows起動時に自動起動」のスイッチを選びます。次回のWindowsサインイン時から起動します。Google Driveなどの準備が遅い場合は、実行ファイルが利用可能になるまで最大5分待機します。", styles),
-        step(3, "フォルダーを移動するときは登録し直す", "移動前に自動起動をOFFにし、移動後のkoyomado.exeから再びONにします。", styles),
+        step(2, "自動起動をON", "「Windows起動時に自動起動」のスイッチを選びます。Store版はWindowsのスタートアップタスク、ポータブル版は実行ファイルを待つ遅延起動を登録します。", styles),
+        step(3, "Windows側で無効にした場合", "Store版はWindowsの「設定」-「アプリ」-「スタートアップ」でも状態を確認できます。利用者または組織の設定で拒否されている場合は、Koyomadoから勝手に解除しません。", styles),
+        card("ポータブル版のフォルダーを移動するとき", "移動前に自動起動をOFFにし、移動後のkoyomado.exeから再びONにします。Google Driveの準備が遅いPCでは、実行ファイルが利用可能になるまで最大5分待機します。", styles, SKY_PALE),
         card("起動したのに見えないとき", "表示先がトレイを含む場合は、通知領域と「隠れているインジケーター」を確認します。保存位置が現在のモニター構成の画面外なら、Koyomadoは見える位置へ自動的に戻します。", styles, SAND_PALE),
         PageBreak(),
     ])
@@ -794,7 +796,7 @@ def build_story(styles: dict[str, ParagraphStyle]) -> list:
         Spacer(1, 4 * mm),
         step(1, "音を選んで試聴", "標準音または設定済みの自分の音を選び、「選択中の音を試聴」で確認します。もう一度押すと停止します。", styles),
         step(2, "音量と再生秒数を調整", "音量は0～100%、通知で鳴らす長さは3～60秒で調整します。初期値は12秒です。試聴中は停止ボタンを押すまで再生します。", styles),
-        step(3, "自分の音源を使う", "「ファイルを選ぶ」から15MBまでのMP3、M4A、AAC、WAV、OGG、Opus、FLAC、MIDIを選びます。選択したファイルはdata/notification-soundsへコピーされます。", styles),
+        step(3, "自分の音源を使う", "「ファイルを選ぶ」から15MBまでのMP3、M4A、AAC、WAV、OGG、Opus、FLAC、MIDIを選びます。選択したファイルは、現在の版のdata/notification-soundsへコピーされます。", styles),
         Spacer(1, 4 * mm),
         two_cards([
             ("MIDIの音色", "Koyomado内蔵の穏やかな音色で再生するため、元の楽器・音源とは異なる場合があります。"),
@@ -806,8 +808,13 @@ def build_story(styles: dict[str, ParagraphStyle]) -> list:
     ])
 
     # 13: data and update
-    page_title(story, styles, "DATA AND UPDATE", "データ保存・持ち運び・更新", "予定と設定は暗号化せず、koyomado.exeと同じ場所のdataフォルダーへ保存します。Googleの更新トークンだけはWindows資格情報マネージャーへ保存します。")
+    page_title(story, styles, "DATA AND UPDATE", "データ保存・持ち運び・更新", "予定と設定は暗号化せず、配布方法ごとのdataフォルダーへ保存します。Googleの更新トークンだけはWindows資格情報マネージャーへ保存します。")
     story.extend([
+        two_cards([
+            ("Microsoft Store版", "%LOCALAPPDATA%\\Packages\\Y-TEC.Koyomado_y7q84f7nwz24j\\LocalState\\Koyomado\\data<br/>Store更新時も同じ場所を使用"),
+            ("ポータブル版", "koyomado.exeと同じ場所のdata<br/>フォルダーごと持ち運び可能"),
+        ], styles, [GREEN_PALE, SKY_PALE]),
+        Spacer(1, 3 * mm),
         data_table([
             ("calendar-data.json", "予定、日時、繰り返し、リマインダー、削除済み予定、外観、通知音、Google接続設定"),
             ("calendar-data.backup.json", "予定データを更新する直前のバックアップ"),
@@ -818,20 +825,15 @@ def build_story(styles: dict[str, ParagraphStyle]) -> list:
             ("window-state.v1.backup.json", "旧形式から移行する前の位置情報（移行時のみ）"),
             ("Windows資格情報", "Googleの更新トークン。PCごとに保存され、フォルダーには含まれません"),
         ], styles, 58 * mm),
-        Spacer(1, 4 * mm),
-        two_cards([
-            ("USBメモリ", "Koyomadoフォルダー全体をコピーします。取り外す前にKoyomadoを完全終了してください。"),
-            ("Google Drive", "同期完了後に起動し、同じフォルダーを複数PCから同時に開かないでください。競合の自動解決は行いません。"),
-        ], styles, [GREEN_PALE, SKY_PALE]),
-        Spacer(1, 4 * mm),
-        p("新しい版へ更新する", styles["h2"]),
-        step(1, "Koyomadoを終了", "タスクバーのみなら×で終了。トレイを使う設定なら、トレイアイコンを右クリックして「終了」を選びます。", styles),
-        step(2, "dataをバックアップ", "現在のKoyomadoフォルダー内のdataフォルダーを、別の安全な場所へコピーします。", styles),
-        step(3, "新しいZIPを展開", "新しいフォルダーへ「すべて展開」します。", styles),
-        step(4, "dataを引き継ぐ", "古いKoyomadoフォルダーのdataフォルダーを、新しいKoyomadoフォルダーへコピーします。", styles),
-        step(5, "起動して確認", "koyomado.exeを起動し、予定・背景・位置を確認します。自動起動は新しい場所からONにし直し、Google連携は移動先PCで再認証します。", styles),
         Spacer(1, 3 * mm),
-        card("大切な注意", "dataフォルダーを削除したり、新しい空のdataだけを残したりすると、予定を引き継げません。アプリの更新前には必ずフォルダーごとバックアップしてください。", styles, ROSE_PALE),
+        data_table([
+            ("Store版の更新", "Microsoft Storeから更新。dataは上記のMSIX LocalStateに残ります。アンインストール前は別の場所へバックアップします"),
+            ("ポータブル版の更新", "終了後にdataをバックアップし、新しいZIPへdataをコピー。自動起動は登録し直します"),
+            ("版を切り替える", "両方を終了。Store版は一度起動して終了後、元のdataの中身を新しい保存先へコピー。元データはバックアップ"),
+            ("USB / Google Drive", "ポータブル版だけフォルダーごと移動。同じフォルダーを複数PCから同時起動しません"),
+        ], styles, 46 * mm),
+        Spacer(1, 3 * mm),
+        card("二つの版を同時起動しない", "Store版とポータブル版は保存先が別です。同じGoogle予定の重複同期や二重通知を避けるため、移行確認後は普段使う一方だけを起動してください。別PCではGoogleアカウントを再認証します。", styles, ROSE_PALE),
         PageBreak(),
     ])
 
@@ -1092,7 +1094,7 @@ def build_story(styles: dict[str, ParagraphStyle]) -> list:
     ])
 
     # 25: trouble and reference
-    page_title(story, styles, "HELP", "困ったとき・早見表", "画面に予定が見えない場合は、まず月、日付、タスクバーまたはトレイ、dataフォルダーの順に確認してください。")
+    page_title(story, styles, "HELP", "困ったとき・早見表", "画面に予定が見えない場合は、まず月、日付、タスクバーまたはトレイ、利用中の版のdataフォルダーを確認してください。")
     story.extend([
         data_table([
             ("画面が見つからない", "タスクバーを確認。トレイを使う設定ではKoyomadoアイコンを左クリックし、隠れているアイコンも確認します。"),
@@ -1102,7 +1104,7 @@ def build_story(styles: dict[str, ParagraphStyle]) -> list:
             ("貼り付けが選べない", "先に予定を右クリックして「内容をコピー」を選びます。"),
             ("通知が出ない", "Koyomadoが起動中か、予定の通知時刻、音なし設定、音量を確認。スリープ中や終了中の通知は後からまとめて表示しません。"),
             ("起動時の位置がおかしい", "現在のモニター構成で最後に保存した位置へ戻ります。初めての構成や画面外の位置は自動で見える位置へ戻るため、希望の場所へ移動して終了し直してください。"),
-            ("データが壊れた", "バックアップから自動復旧を試み、壊れたファイルはcorrupt付きの名前で退避します。直らない場合はdataのバックアップを戻します。"),
+            ("データが壊れた", "バックアップから自動復旧を試み、壊れたファイルはcorrupt付きの名前で退避します。直らない場合はStore版ならLocalAppData、ポータブル版ならアプリ横のdataへバックアップを戻します。"),
         ], styles, 46 * mm),
         Spacer(1, 4 * mm),
         p("操作早見表", styles["h2"]),
@@ -1115,8 +1117,8 @@ def build_story(styles: dict[str, ParagraphStyle]) -> list:
         p("仕様上の範囲", styles["h2"]),
         p("Koyomadoには、印刷、予定のPDF出力、アクセス解析、独自クラウドサーバーはありません。外部通信は利用者が任意で有効にするGoogleカレンダー連携だけです。予定データとOAuthクライアント設定は暗号化されないため、機密情報やパスワードの保存には使用しないでください。祝日は1970年から2050年までの内蔵データを使います。", styles["body"]),
         card("お問い合わせ前に用意すると役立つ情報", "Koyomadoのバージョン、Windowsのバージョン、発生した操作、表示されたメッセージ、再現手順。予定の本文や個人情報は送らないでください。", styles, SAND_PALE),
-        Spacer(1, 5 * mm),
-        p(f'<b>公式ページ</b><br/><link href="{OFFICIAL_URL}" color="#5f5278">{OFFICIAL_URL}</link><br/><br/><b>ソースコード</b><br/><link href="{SOURCE_URL}" color="#5f5278">{SOURCE_URL}</link><br/><br/>利用条件はApache License 2.0のLICENSE.txt、Google連携の扱いはPRIVACY.mdをご確認ください。', styles["link"]),
+        Spacer(1, 3 * mm),
+        p("公式ページとソースコードは表紙に記載しています。利用条件はApache License 2.0のLICENSE.txt、Google連携の扱いはPRIVACY.mdをご確認ください。", styles["muted"]),
     ])
     return story
 
@@ -1134,7 +1136,7 @@ def generate(output: Path) -> None:
         bottomMargin=MARGIN_BOTTOM,
         title=f"Koyomado 操作説明書 v{VERSION}",
         author="Y-TEC",
-        subject="Koyomado Windowsポータブルカレンダーの操作説明書",
+        subject="Koyomado Windowsデスクトップカレンダーの操作説明書",
         creator="Koyomado manual generator",
     )
     frame = Frame(

@@ -1,4 +1,4 @@
-name: Build release candidate
+name: Build release signing inputs
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: release-${{ github.ref }}
@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   build-windows:
-    name: Build portable package
+    name: Build Windows signing inputs
     runs-on: windows-latest
     timeout-minutes: 45
 
@@ -37,6 +37,8 @@ jobs:
           npm run lint
           npm test
           npm run build
+          npm run test:windows-signing-policy
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-partner-center-submission.ps1 -SkipArtifactHashCheck
           Push-Location src-tauri
           cargo fmt --all --check
           cargo test --locked
@@ -55,49 +57,28 @@ jobs:
       - name: Build executable
         run: npm run tauri:build
 
-      - name: Build portable ZIP and SHA-256
+      - name: Build Store submission package
         shell: pwsh
         run: |
-          & ./scripts/package-portable.ps1 -SkipBuild
           $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
-          $archive = "release/koyomado-v$version-windows-portable.zip"
-          $manual = "docs/Koyomado操作説明書.pdf"
-          $releaseManual = "release/Koyomado.pdf"
-          Copy-Item -LiteralPath $manual -Destination $releaseManual
-          $archiveHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $archive).Hash.ToLowerInvariant()
-          $manualHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $releaseManual).Hash.ToLowerInvariant()
-          @(
-            "$archiveHash  $(Split-Path -Leaf $archive)"
-            "$manualHash  $(Split-Path -Leaf $releaseManual)"
-          ) | Set-Content -Encoding utf8NoBOM -LiteralPath "release/SHA256SUMS.txt"
+          if ($version -notmatch '^\d+\.\d+\.\d+$') {
+            throw "Store submission builds require a stable x.y.z package version."
+          }
+          & ./scripts/package-msix.ps1 -SkipBuild -PackageVersion "$version.0" -CreateUpload
 
-      - name: Upload unsigned release artifact
-        id: upload-unsigned
+      - name: Upload unsigned signing inputs and Store package
+        id: upload-signing-inputs
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: koyomado-unsigned-${{ github.ref_name }}
+          name: koyomado-signing-inputs-${{ github.ref_name }}
           path: |
             src-tauri/target/release/koyomado.exe
-            release/koyomado-v*-windows-portable.zip
-            release/Koyomado.pdf
-            release/SHA256SUMS.txt
+            release/koyomado-v*-store-x64.msix
+            release/koyomado-v*-store-x64.msixupload
+            docs/Koyomado操作説明書.pdf
           if-no-files-found: error
           retention-days: 14
 
-      - name: Create or update draft GitHub Release
-        if: github.ref_type == 'tag'
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
-          $archive = "release/koyomado-v$version-windows-portable.zip"
-          gh release view $env:GITHUB_REF_NAME *> $null
-          if ($LASTEXITCODE -ne 0) {
-            gh release create $env:GITHUB_REF_NAME --draft --verify-tag --title "Koyomado $version" --generate-notes
-          }
-          gh release upload $env:GITHUB_REF_NAME $archive "release/Koyomado.pdf" "release/SHA256SUMS.txt" --clobber
-
-# SignPath Foundationで採択後、upload-unsignedのartifact-idを
-# signpath/github-action-submit-signing-requestへ渡す署名ステップを追加します。
-# 採択前のArtifactとdraft Releaseは必ず「未署名」として扱います。
+# Store提出用MSIXはPartner Center側で署名します。
+# 直接配布用ZIPは、管理されたWindows端末で自己署名と検証を行った後にだけ
+# GitHub Releaseと公式サイトへ公開します。このworkflowは公開操作を行いません。

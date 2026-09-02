@@ -1,5 +1,6 @@
 ﻿param(
-    [switch]$SkipBuild
+    [switch]$SkipBuild,
+    [string]$ExecutablePath
 )
 
 $ErrorActionPreference = "Stop"
@@ -10,12 +11,19 @@ $packageJson = Get-Content -LiteralPath (Join-Path $projectRoot "package.json") 
 $version = $packageJson.version
 $archivePath = Join-Path $releaseRoot "koyomado-v$version-windows-portable.zip"
 $stagingPath = Join-Path $releaseRoot ".staging-koyomado-$PID"
-$executablePath = Join-Path $projectRoot "src-tauri\target\release\koyomado.exe"
+$defaultExecutablePath = Join-Path $projectRoot "src-tauri\target\release\koyomado.exe"
 
 Push-Location $projectRoot
 try {
     if (-not $SkipBuild) {
         npm run tauri:build
+        if ($LASTEXITCODE -ne 0) { throw "Tauriビルドに失敗しました。" }
+    }
+    $executablePath = if ($ExecutablePath) {
+        (Resolve-Path -LiteralPath $ExecutablePath).Path
+    }
+    else {
+        $defaultExecutablePath
     }
     if (-not (Test-Path -LiteralPath $executablePath -PathType Leaf)) {
         throw "ビルド済み実行ファイルが見つかりません: $executablePath"
@@ -42,8 +50,8 @@ try {
 
     Import-Module Microsoft.PowerShell.Security -ErrorAction Stop
     $signature = Get-AuthenticodeSignature -LiteralPath $executablePath
-    $signatureNote = if ($signature.Status -eq "Valid") {
-        "6. この実行ファイルはコード署名済みです。署名者とSHA-256を公式ページで確認してください。"
+    $signatureNote = if ($signature.SignerCertificate) {
+        "6. この実行ファイルはコード署名済みです。自己署名版ではWindowsの警告が表示される場合があります。署名者とSHA-256を公式ページで確認してください。"
     }
     else {
         "6. この実行ファイルは未署名です。公式ページから入手し、掲載されたSHA-256を確認してください。"

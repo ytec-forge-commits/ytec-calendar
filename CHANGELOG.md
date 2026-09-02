@@ -2,6 +2,20 @@
 
 ## 未リリース
 
+## 1.0.0 - 2026-09-02
+
+初の正式リリースです。`1.0.0-rc.4`までのカレンダー、繰り返し予定、通知、Googleカレンダー同期を引き継ぎ、配布方法を追加しました。
+
+- Microsoft Store向けMSIX版を追加
+- Store版では予定と設定をMSIX専用の `%LOCALAPPDATA%\Packages\Y-TEC.Koyomado_y7q84f7nwz24j\LocalState\Koyomado\data` へ保存し、Microsoft Storeの更新後も維持
+- Store版の自動起動をWindowsのStartupTaskへ変更
+- 従来の実行ファイル横へ保存するポータブル版を継続し、Y-TEC自己署名とSHA-256を付けた直接配布物を用意
+- Store版とポータブル版で保存先と自動起動方式を安全に分離
+- Store版のパッケージIdentity、StartupTask、ライセンス同梱、必須ファイルを検証する配布工程を追加
+- Store署名と直接配布用自己署名を混在させないリリース工程へ整理
+- 直接配布用証明書の再利用時に、自己署名・コード署名用途・秘密鍵の非エクスポートを機械確認
+- Store掲載資料、検索語上限、プライバシーURL、`runFullTrust`利用理由を提出前テストの対象へ追加
+
 ## 1.0.0-rc.4 - 2026-08-23
 
 正式リリース前の最終ベータ版です。

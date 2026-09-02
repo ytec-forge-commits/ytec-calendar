@@ -1672,7 +1672,7 @@ dependencies = [
 
 [[package]]
 name = "koyomado"
-version = "1.0.0-rc.4"
+version = "1.0.0"
 dependencies = [
  "auto-launch",
  "chrono",
@@ -1683,6 +1683,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "url",
+ "windows",
  "windows-sys 0.59.0",
 ]
 

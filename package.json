@@ -1,7 +1,7 @@
 {
   "name": "koyomado",
   "private": true,
-  "version": "1.0.0-rc.4",
+  "version": "1.0.0",
   "license": "Apache-2.0",
   "repository": "https://github.com/ytec-forge-commits/ytec-calendar",
   "type": "module",
@@ -14,7 +14,11 @@
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build --no-bundle",
-    "tauri:portable": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-portable.ps1"
+    "tauri:portable": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-portable.ps1",
+    "package:msix": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-msix.ps1",
+    "package:self-signed": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-self-signed-direct.ps1",
+    "test:windows-signing-policy": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-code-signing-certificate-policy.ps1",
+    "test:store-submission": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-partner-center-submission.ps1"
   },
   "dependencies": {
     "@gahojin-inc/holiday-japanese": "^2026.7.1",

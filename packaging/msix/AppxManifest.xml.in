@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap desktop rescap">
+  <Identity
+    Name="Y-TEC.Koyomado"
+    Publisher="CN=F7BD381A-C29C-41A4-B039-8E9962198E21"
+    Version="__PACKAGE_VERSION__"
+    ProcessorArchitecture="x64" />
+
+  <Properties>
+    <DisplayName>Koyomado</DisplayName>
+    <PublisherDisplayName>Y-TEC</PublisherDisplayName>
+    <Logo>assets\StoreLogo.png</Logo>
+    <Description>予定をいつでも目に入る場所へ置ける、Windows用デスクトップカレンダーです。</Description>
+  </Properties>
+
+  <Resources>
+    <Resource Language="ja-jp" />
+  </Resources>
+
+  <Dependencies>
+    <TargetDeviceFamily
+      Name="Windows.Desktop"
+      MinVersion="10.0.19041.0"
+      MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+
+  <Applications>
+    <Application
+      Id="Koyomado"
+      Executable="app\koyomado.exe"
+      EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        AppListEntry="default"
+        DisplayName="Koyomado"
+        Description="予定をいつでも目に入る場所へ置ける、Windows用デスクトップカレンダーです。"
+        BackgroundColor="#F2F7F4"
+        Square150x150Logo="assets\Square150x150Logo.png"
+        Square44x44Logo="assets\Square44x44Logo.png">
+        <uap:DefaultTile
+          Square71x71Logo="assets\Square71x71Logo.png" />
+      </uap:VisualElements>
+      <Extensions>
+        <desktop:Extension
+          Category="windows.startupTask"
+          Executable="app\koyomado.exe"
+          EntryPoint="Windows.FullTrustApplication">
+          <desktop:StartupTask
+            TaskId="KoyomadoStartup"
+            Enabled="false"
+            DisplayName="Koyomado" />
+        </desktop:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+</Package>
