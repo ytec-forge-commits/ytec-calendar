@@ -5,6 +5,8 @@
 Koyomado is a simple Windows calendar that can sit on your desktop like a widget. It is distributed as a Microsoft Store app for general use and as a portable folder that can be carried on USB storage or Google Drive.
 
 - Official website: https://ytec.cloudfree.jp/forge/en/projects/koyomado/
+- Microsoft Store (recommended): https://apps.microsoft.com/detail/9P6WFRBWG8X5
+- Portable edition: https://github.com/ytec-forge-commits/ytec-calendar/releases/tag/v1.0.0
 - Supported operating systems: Windows 10 / 11 (64-bit)
 - License: Apache License 2.0
 
@@ -34,7 +36,7 @@ Koyomado does not include printing, PDF export, advertising, analytics, or a pro
 
 ## Getting started
 
-1. Install the Microsoft Store edition from the Store. For the portable edition, extract the ZIP where you intend to keep it.
+1. For everyday use, install the [Microsoft Store edition](https://apps.microsoft.com/detail/9P6WFRBWG8X5). When portability is needed, extract the [portable edition](https://github.com/ytec-forge-commits/ytec-calendar/releases/tag/v1.0.0) ZIP where you intend to keep it.
 2. Launch the Store edition from the Start menu, or run `koyomado.exe` for the portable edition.
 3. Open the gear menu in the upper-right corner and configure the display mode and Windows startup behavior.
 4. Move and resize the window as desired. Koyomado will restore that placement the next time it starts with the same monitor configuration.

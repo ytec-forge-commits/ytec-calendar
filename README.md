@@ -5,6 +5,8 @@
 Koyomadoは、Windowsのデスクトップへウィジェットのように置いて使える、シンプルなカレンダーです。一般利用向けのMicrosoft Store版と、USBメモリやGoogle Driveへフォルダーごと持ち運べるポータブル版を用意します。
 
 - 公式ページ: https://ytec.cloudfree.jp/forge/projects/koyomado/
+- Microsoft Store（推奨）: https://apps.microsoft.com/detail/9P6WFRBWG8X5
+- ポータブル版: https://github.com/ytec-forge-commits/ytec-calendar/releases/tag/v1.0.0
 - 対応OS: Windows 10 / 11（64bit）
 - ライセンス: Apache License 2.0
 
@@ -34,7 +36,7 @@ Koyomadoは、Windowsのデスクトップへウィジェットのように置�
 
 ## 初回の使い方
 
-1. Microsoft Store版はStoreからインストールします。ポータブル版は配布ZIPを今後使う場所へ展開します。
+1. 普段使いには[Microsoft Store版](https://apps.microsoft.com/detail/9P6WFRBWG8X5)をインストールします。持ち運んで使う場合は、[ポータブル版](https://github.com/ytec-forge-commits/ytec-calendar/releases/tag/v1.0.0)のZIPを今後使う場所へ展開します。
 2. Store版はスタートメニュー、ポータブル版は`koyomado.exe`から起動します。
 3. 右上の歯車から、表示方法とWindows自動起動を好みに合わせて設定します。
 4. ウィンドウを好きな位置とサイズへ調整します。同じモニター構成では、次回からその位置で開きます。
