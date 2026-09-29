@@ -1,0 +1,260 @@
+{
+  "attestationDate": "2026-09-29",
+  "files": [
+    {
+      "path": "src-tauri/icons/128x128.png",
+      "size": 19507,
+      "sha256": "ec923c21041a8283e88ce334ee4d60a7a7e55a9b62f8eb30a4ae97c49f9f893a"
+    },
+    {
+      "path": "src-tauri/icons/128x128@2x.png",
+      "size": 57795,
+      "sha256": "f82ccfdd1ee5ae7a6bfe3fa769ef343a6efee7d601a5157d80fe3e62c8040987"
+    },
+    {
+      "path": "src-tauri/icons/32x32.png",
+      "size": 2384,
+      "sha256": "abfdec935a0f3fff577a5212001cea6f1d31cff46522598aad33341b96af3cc4"
+    },
+    {
+      "path": "src-tauri/icons/64x64.png",
+      "size": 6548,
+      "sha256": "39a08db411555b211a8db204396e24134fd775de675dcd517bda659e28e6ea90"
+    },
+    {
+      "path": "src-tauri/icons/app-icon.svg",
+      "size": 1038,
+      "sha256": "70b833b424a7311ddf7b10cf18686e7215b16342be3445f96f6ee36eebe7b6eb"
+    },
+    {
+      "path": "src-tauri/icons/icon.ico",
+      "size": 96714,
+      "sha256": "609db2b3542f1629c8dba92c0275c8bfde6981b34913df2f2af5a7e050fb3d73"
+    },
+    {
+      "path": "src-tauri/icons/icon.png",
+      "size": 152504,
+      "sha256": "24a0d9c4149075baea3afcfb6997a8acf26fc7f4871d651dde798a42b5c29e2f"
+    },
+    {
+      "path": "src-tauri/icons/Square107x107Logo.png",
+      "size": 14529,
+      "sha256": "9b159b0576205e3864c29105ccc39dad8462dad336654c2ac9c5f14c661f1116"
+    },
+    {
+      "path": "src-tauri/icons/Square142x142Logo.png",
+      "size": 23302,
+      "sha256": "7a441f48b0463f8691f33d01f2d82a35ffe9be6aafe49ac1d34bc259e3f3a035"
+    },
+    {
+      "path": "src-tauri/icons/Square150x150Logo.png",
+      "size": 25485,
+      "sha256": "570ac8755a8e4d34857ae9262fb90d99675ea1dc8f677aa1df2d1c54dc8606eb"
+    },
+    {
+      "path": "src-tauri/icons/Square284x284Logo.png",
+      "size": 70211,
+      "sha256": "faad3aa70f729a857be220768bd9ab17301653db83de0471a0f704ce4a3c91d0"
+    },
+    {
+      "path": "src-tauri/icons/Square30x30Logo.png",
+      "size": 2223,
+      "sha256": "1d1ed75af0bb0fab2a8598bca6c320ee9835ecfb3dce286c188d387bca846cad"
+    },
+    {
+      "path": "src-tauri/icons/Square310x310Logo.png",
+      "size": 79604,
+      "sha256": "662ef581d55dcc01c440efcd0374fef188b9d8bb44a2208f8c4dd4340e99257c"
+    },
+    {
+      "path": "src-tauri/icons/Square44x44Logo.png",
+      "size": 3842,
+      "sha256": "30e67ecde27fef9d3c8bc91a9812045bb8e817111eb8059abc98ec92f9573a83"
+    },
+    {
+      "path": "src-tauri/icons/Square71x71Logo.png",
+      "size": 7615,
+      "sha256": "da375b4a5831a1cf84d571077eb2ba570d9e04fdb603e986c69c44e05c1d59e7"
+    },
+    {
+      "path": "src-tauri/icons/Square89x89Logo.png",
+      "size": 10853,
+      "sha256": "f374bbf346e6463ec7434fbce66b1bec072367b55f1b089e13bf222ddff5403d"
+    },
+    {
+      "path": "src-tauri/icons/StoreLogo.png",
+      "size": 4373,
+      "sha256": "07db2f5fcee76a29949a6eb7a725f3727316d414a5b76e12261c88e7eee1b064"
+    },
+    {
+      "path": "docs/manual-assets/agenda.png",
+      "size": 112586,
+      "sha256": "150b05bc5575647dbe6fcd1d28cf17a909e579c010f0c2aabfea84644b2c318b"
+    },
+    {
+      "path": "docs/manual-assets/anniversary.png",
+      "size": 110485,
+      "sha256": "91b18e6fd25132c0b9bc5d0867a16ad05e11a83d9e1a9976d14bb1ec1f1f0b8c"
+    },
+    {
+      "path": "docs/manual-assets/calendar-v1.png",
+      "size": 120150,
+      "sha256": "d7b675e61d8c60ee426dbc50814465d5f6259273363bba74afb3be6612e922b4"
+    },
+    {
+      "path": "docs/manual-assets/calendar.png",
+      "size": 119663,
+      "sha256": "ea83a635384a32392ccc2946e0ee79873d0bd47dca98b823be6700163a2158ba"
+    },
+    {
+      "path": "docs/manual-assets/editor.png",
+      "size": 74049,
+      "sha256": "66276991ac99f2f1d75dc3e90207beccdd36c841e2c1e5f85cc8a170c21ed374"
+    },
+    {
+      "path": "docs/manual-assets/google-settings-v1.png",
+      "size": 82547,
+      "sha256": "b7f69db5ca09c1e6b258151044e5c342b4aed0ae365595affaf47b0cdffc6075"
+    },
+    {
+      "path": "docs/manual-assets/multi-day-v1.png",
+      "size": 116843,
+      "sha256": "689736c94d1f9488f0ce396f2be764ca72f2362a116f1668f39f23efefaee38a"
+    },
+    {
+      "path": "docs/manual-assets/oauth/01-google-project-create.png",
+      "size": 36606,
+      "sha256": "382e2b9a1e2d3030169768257c31e6590f8ae3f7a1b6abad9f64bbcbb0ddeb69"
+    },
+    {
+      "path": "docs/manual-assets/oauth/02-enable-calendar-api.png",
+      "size": 59997,
+      "sha256": "3e818275fe73052f22eeb99853b6d9c94808635612a17e9b44fc3ad538d63edd"
+    },
+    {
+      "path": "docs/manual-assets/oauth/03-auth-platform-start.png",
+      "size": 34483,
+      "sha256": "18c401bacc5ff6d908aee5303ef4a2bcd7af696ba20e7826f50530bcb43f9655"
+    },
+    {
+      "path": "docs/manual-assets/oauth/04-oauth-app-info.png",
+      "size": 43479,
+      "sha256": "8deb72e8a1cca0381aa0532a5f91e12d7243ef4519781624680b0e4a7c353444"
+    },
+    {
+      "path": "docs/manual-assets/oauth/05-oauth-audience-external.png",
+      "size": 65426,
+      "sha256": "f3b93b78b9a6d874837f71bf63fa2fb8c70ab682992657631b04c041f1c2c4df"
+    },
+    {
+      "path": "docs/manual-assets/oauth/06-oauth-contact-email.png",
+      "size": 42005,
+      "sha256": "a01e90338f53a468a5b3ef5e6f79fa08d1ece0e2965f2e547224af346c4b509a"
+    },
+    {
+      "path": "docs/manual-assets/oauth/07-oauth-user-data-policy.png",
+      "size": 37503,
+      "sha256": "5f6f2095fa2624684bba1521cd6d2d716607a2d3ea8875be3f463da95d7d5f49"
+    },
+    {
+      "path": "docs/manual-assets/oauth/08-create-desktop-client.png",
+      "size": 62441,
+      "sha256": "bf013415b757cb0fb8c91e3f8bc7048df708221d8842feceb11e6873d67782fe"
+    },
+    {
+      "path": "docs/manual-assets/oauth/09-download-oauth-json.png",
+      "size": 91764,
+      "sha256": "3265ff6d09cd2160cfe1939d6a667677230f07c31ddf3c3c51ac006bdbee93eb"
+    },
+    {
+      "path": "docs/manual-assets/oauth/11-publish-to-production.png",
+      "size": 42438,
+      "sha256": "562a264118481cd091a60c0f1c0d05da636717d12947c5385f5206037da688e2"
+    },
+    {
+      "path": "docs/manual-assets/oauth/12-confirm-production.png",
+      "size": 60299,
+      "sha256": "f59fb1c27025e59a6b5f7a469bb4dd2cf18b8ec4616d0f5de7ced243b029c8f0"
+    },
+    {
+      "path": "docs/manual-assets/oauth/13-production-complete.png",
+      "size": 56131,
+      "sha256": "728011948321fd41f0af2a3e8aa4ef67243fdddc0b2bb660f55cc32973f932af"
+    },
+    {
+      "path": "docs/manual-assets/oauth/14-koyomado-json-select.png",
+      "size": 67599,
+      "sha256": "0df784dafd5c04b520a0f9138b4e4a89ccf74c15ad930ec48ee166daf59a8b6b"
+    },
+    {
+      "path": "docs/manual-assets/oauth/15-koyomado-json-loaded.png",
+      "size": 67890,
+      "sha256": "4062814c75d81c1d6ca6232c1b4de8821a2067dda13c368c48ae56834c7b7d13"
+    },
+    {
+      "path": "docs/manual-assets/period-editor-v1.png",
+      "size": 98251,
+      "sha256": "8e0dc46fd585b02a479ff48c19581a2ae417f725a86dc404348ee516d477dea1"
+    },
+    {
+      "path": "docs/manual-assets/recurrence-v1.png",
+      "size": 77604,
+      "sha256": "5d7a3eaf0b34a0fb80fb05fde157a06fd38b5cd10ca3e0112db4e7e2e2c21971"
+    },
+    {
+      "path": "docs/manual-assets/settings-v1.png",
+      "size": 102043,
+      "sha256": "e166243c0e368458afddb939619e77a8b68bdb81856944dc152515db71a12e34"
+    },
+    {
+      "path": "docs/manual-assets/themes.png",
+      "size": 100421,
+      "sha256": "8c191300889a4e5d0fd81d408b3782545720a71da1e7aa83e8c609adbc91d27e"
+    },
+    {
+      "path": "src/assets/fonts/LINESeedJP-Bold.ttf",
+      "size": 3786144,
+      "sha256": "67aec2dc10b3ad210d6f7d53b33bbfea42ea28e32fa3834624eee699a638d5ff"
+    },
+    {
+      "path": "src/assets/fonts/LINESeedJP-Regular.ttf",
+      "size": 3673280,
+      "sha256": "04a6c0077ddb8ba5af3638bd76b4600708dde7b38df047b40fbe6f3af358d3c3"
+    },
+    {
+      "path": "src/assets/fonts/OFL.txt",
+      "size": 4322,
+      "sha256": "1cfc3752ddd076bc7d461b6680e42a345f2579f91319fa04192b754b3b993f65"
+    },
+    {
+      "path": "src/assets/sounds/deep-drop.ogg",
+      "size": 33808,
+      "sha256": "7e61202079948a5bb7bb6bb37f22d3d367abdcfb9afd73a52e6f883a93de24be"
+    },
+    {
+      "path": "src/assets/sounds/gentle-chimes.ogg",
+      "size": 46395,
+      "sha256": "bb9c1826553beb87e47a534f9608a7dcd236614bb6194f4323d4661df81e895e"
+    },
+    {
+      "path": "src/assets/sounds/gentle-piano.ogg",
+      "size": 225522,
+      "sha256": "aaf0a2b9649a15ac881d7f9bda283ba09c53b3ac6ea134f2beb6bd3b279aa33d"
+    },
+    {
+      "path": "src/assets/sounds/quiet-kalimba.ogg",
+      "size": 257283,
+      "sha256": "5c6458bfa42a83447716e93be2d77f6dcf5754d43ed676d20d1e63763b3478c4"
+    },
+    {
+      "path": "src/assets/sounds/small-bell.ogg",
+      "size": 19098,
+      "sha256": "bc69b15effae9314e8afb86229bb83acdab6afd79d552b786f53a4812d902980"
+    },
+    {
+      "path": "src/assets/koyomado-logo.png",
+      "size": 57795,
+      "sha256": "f82ccfdd1ee5ae7a6bfe3fa769ef343a6efee7d601a5157d80fe3e62c8040987"
+    }
+  ]
+}

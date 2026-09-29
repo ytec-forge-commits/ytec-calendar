@@ -1,0 +1,46 @@
+name: 不具合報告
+description: Koyomadoの不具合を報告します
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: 認証情報、OAuthクライアントJSON、実際の予定内容は記載しないでください。
+  - type: input
+    id: version
+    attributes:
+      label: Koyomadoのバージョン
+      placeholder: 例 1.0.0
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windowsのバージョン
+      placeholder: 例 Windows 11 24H2
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 再現手順
+      description: 合成予定を使って再現できる手順を記載してください。
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期待した動作
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 実際の動作
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: 補足
+      description: 個人情報を除いたスクリーンショットなどがあれば添付してください。

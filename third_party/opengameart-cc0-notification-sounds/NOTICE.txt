@@ -1,0 +1,27 @@
+Koyomado built-in notification sounds
+======================================
+
+License: Creative Commons Zero v1.0 Universal (CC0 1.0)
+https://creativecommons.org/publicdomain/zero/1.0/
+
+1. gentle-chimes.ogg / deep-drop.ogg / small-bell.ogg
+   Source: UI Sound Effects (Button Clicks, User Feedback, Notifications)
+   Author: Robin Lamb
+   https://opengameart.org/content/ui-sound-effects-button-clicks-user-feedback-notifications
+   The source collection is based on public-domain VCSL and VSCO 2 CE samples.
+
+2. gentle-piano.ogg
+   Source: A Simple Trifle (ASimpleTrifle.ogg)
+   Author: jestar
+   https://opengameart.org/content/a-simple-trifle
+   Koyomado edit: 10.5 second excerpt, loudness adjustment, fade-in and fade-out.
+
+3. quiet-kalimba.ogg
+   Source: Short kalimba loop (Kalimba.ogg)
+   Author: extenz
+   https://opengameart.org/content/short-kalimba-loop
+   Koyomado edit: 10.5 second excerpt, loudness adjustment, fade-in and fade-out.
+
+All listed source pages declared the corresponding files CC0 when retrieved on
+2026-08-23. Attribution is not required by CC0, but this notice is included to
+make the origin and editing history clear.

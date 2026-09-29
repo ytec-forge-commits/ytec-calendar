@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify-windows:
+    name: Verify Windows build
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install JavaScript dependencies
+        run: npm ci
+
+      - name: Verify frontend
+        run: |
+          npm run lint
+          npm test
+          npm run build
+
+      - name: Verify Rust formatting
+        working-directory: src-tauri
+        run: cargo fmt --all --check
+
+      - name: Test Rust
+        working-directory: src-tauri
+        run: cargo test --locked
+
+      - name: Lint Rust
+        working-directory: src-tauri
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+      - name: Build native executable
+        run: npm run tauri:build
+
+      - name: Upload executable for inspection
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: koyomado-windows-${{ github.sha }}
+          path: src-tauri/target/release/koyomado.exe
+          if-no-files-found: error
+          retention-days: 7
