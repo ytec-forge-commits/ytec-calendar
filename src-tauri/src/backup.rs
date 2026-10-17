@@ -281,10 +281,14 @@ fn read_archive(path: &Path) -> Result<Files, String> {
     if data
         .events
         .iter()
-        .chain(data.deleted_events.iter().map(|d| &d.event))
         .any(|e| e.id.is_empty() || !ids.insert(e.id.clone()))
     {
-        return Err("予定IDが空、または重複しています".into());
+        return Err("現在の予定IDが空、または重複しています".into());
+    }
+    // A Google event restored after deletion keeps its stable ID. Each deletion
+    // is a separate historical record and may share an ID with a live event.
+    if data.deleted_events.iter().any(|d| d.event.id.is_empty()) {
+        return Err("削除履歴の予定IDが空です".into());
     }
     if let Some(sound) = &data.settings.notifications.custom_sound {
         if !files.contains_key(&format!("notification-sounds/{}", sound.stored_file_name)) {
@@ -808,6 +812,98 @@ mod tests {
         .unwrap();
         fs::write(root.join("window-state.json"), b"must-not-travel").unwrap();
     }
+    #[test]
+    fn backup_retains_live_event_and_multiple_deletion_records_with_the_same_id() {
+        let root = area("reused-google-id");
+        let source = root.join("source");
+        seed(&source);
+        let path = source.join("calendar-data.json");
+        let mut data = load_app_data_from_path(&path).unwrap();
+        let event: CalendarEvent = serde_json::from_value(serde_json::json!({
+            "id":"google-synthetic-reused", "title":"synthetic restored event",
+            "date":"2026-10-17", "endDate":"2026-10-17", "allDay":true,
+            "startTime":"", "endTime":"", "location":"", "notes":"",
+            "style":{"color":"#83a9c2"}, "createdAt":"2026-10-01T00:00:00Z",
+            "updatedAt":"2026-10-17T00:00:00Z"
+        }))
+        .unwrap();
+        data.events.push(event.clone());
+        data.deleted_events.push(DeletedCalendarEvent {
+            event: event.clone(),
+            deleted_at: "2026-10-02T00:00:00Z".into(),
+        });
+        data.deleted_events.push(DeletedCalendarEvent {
+            event,
+            deleted_at: "2026-10-03T00:00:00Z".into(),
+        });
+        fs::write(&path, serde_json::to_vec(&data).unwrap()).unwrap();
+        let original = fs::read(&path).unwrap();
+        let archive = root.join("backup.zip");
+        export_to(&source, &archive).unwrap();
+        let target = root.join("restored");
+        fs::create_dir(&target).unwrap();
+        let restored = restore_to(&archive, &target).unwrap();
+        assert_eq!(restored.events.len(), 1);
+        assert_eq!(restored.deleted_events.len(), 2);
+        assert_eq!(restored.events[0].id, "google-synthetic-reused");
+        assert!(restored
+            .deleted_events
+            .iter()
+            .all(|item| item.event.id == restored.events[0].id));
+        assert_eq!(
+            restored.deleted_events[0].deleted_at,
+            "2026-10-02T00:00:00Z"
+        );
+        assert_eq!(
+            restored.deleted_events[1].deleted_at,
+            "2026-10-03T00:00:00Z"
+        );
+        assert_eq!(fs::read(&path).unwrap(), original);
+    }
+
+    #[test]
+    fn backup_still_rejects_duplicate_live_event_ids_without_changing_the_source() {
+        let root = area("duplicate-live-id");
+        let source = root.join("source");
+        seed(&source);
+        let path = source.join("calendar-data.json");
+        let mut data = load_app_data_from_path(&path).unwrap();
+        let event: CalendarEvent = serde_json::from_value(serde_json::json!({
+            "id":"duplicate", "title":"synthetic", "date":"2026-10-17", "endDate":"2026-10-17",
+            "allDay":true, "startTime":"", "endTime":"", "location":"", "notes":"",
+            "style":{"color":"#83a9c2"},
+            "createdAt":"2026-10-01T00:00:00Z", "updatedAt":"2026-10-17T00:00:00Z"
+        }))
+        .unwrap();
+        data.events.extend([event.clone(), event]);
+        fs::write(&path, serde_json::to_vec(&data).unwrap()).unwrap();
+        let original = fs::read(&path).unwrap();
+        let archive = root.join("backup.zip");
+        assert!(export_to(&source, &archive).is_err());
+        assert!(!archive.exists());
+        assert_eq!(fs::read(&path).unwrap(), original);
+        // Empty IDs are still corrupt, whether in the live calendar or history.
+        let mut empty = data.events[0].clone();
+        empty.id.clear();
+        for deleted in [false, true] {
+            data.events.clear();
+            data.deleted_events.clear();
+            if deleted {
+                data.deleted_events.push(DeletedCalendarEvent {
+                    event: empty.clone(),
+                    deleted_at: "2026-10-17T00:00:00Z".into(),
+                });
+            } else {
+                data.events.push(empty.clone());
+            }
+            fs::write(&path, serde_json::to_vec(&data).unwrap()).unwrap();
+            let before = fs::read(&path).unwrap();
+            assert!(export_to(&source, &archive).is_err());
+            assert!(!archive.exists());
+            assert_eq!(fs::read(&path).unwrap(), before);
+        }
+    }
+
     #[test]
     fn export_and_restore_keep_settings_sound_and_source_without_oauth_secret() {
         let root = area("roundtrip");

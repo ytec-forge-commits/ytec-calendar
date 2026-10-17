@@ -1759,7 +1759,7 @@ function SettingsDialog({ settings, saveError, onStorageChanged, onStorageBusyCh
           <BackupSettings onChanged={onStorageChanged} onBusyChange={onStorageBusyChange} />
           {status && <p className="settings-status" role="status">{status}</p>}
         </div>
-        <footer className="dialog-footer"><span role="status">{storageBusy ? "保存先を確認・切替中…" : ""}</span><button className="primary-button" disabled={storageBusy} onClick={() => void closeSettings()}>完了</button></footer>
+        <footer className="dialog-footer"><span role="status">{storageBusy ? "データ操作を処理中…" : ""}</span><button className="primary-button" disabled={storageBusy} onClick={() => void closeSettings()}>完了</button></footer>
       </section>
     </div>
   );

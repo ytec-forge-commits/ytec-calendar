@@ -1,5 +1,12 @@
 # Koyomado changelog
 
+## 1.1.1 - 2026-10-17
+
+- Fix ZIP backup/restore validation rejecting legitimate shared IDs between active events and deletion history, including repeated deletions of the same event.
+- Preserve event IDs and every history record; continue rejecting duplicate active IDs, empty IDs and invalid archives.
+- Show manual backup, restore and automatic backup results beside their respective controls and scroll them into view.
+- Keep calendar format v5, ZIP format v1 and compatibility with existing data and 1.1.0 archives.
+
 ## 1.1.0 (2026-10-17)
 
 - Choose a locally accessible calendar data folder in both Store and self-signed portable editions, including folders mounted by Google Drive.

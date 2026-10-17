@@ -1672,7 +1672,7 @@ dependencies = [
 
 [[package]]
 name = "koyomado"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "auto-launch",
  "chrono",

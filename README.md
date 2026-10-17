@@ -4,11 +4,11 @@
 
 Koyomadoは、Windowsのデスクトップへウィジェットのように置いて使える、シンプルなカレンダーです。一般利用向けのMicrosoft Store版と、USBメモリやGoogle Driveへフォルダーごと持ち運べるポータブル版を用意します。
 
-**1.1.0（2026-10-17）**。保存先指定、ZIPバックアップ／復元、自動バックアップ、共有データ保護を追加しています。Store・Vectorは審査・更新完了後の配信になります。新機能の利用には1.1.0以降が必要です。アプリUIは日本語です。[日本語操作説明書](docs/Koyomado操作説明書.pdf)と[英語操作説明書](docs/Koyomado-Manual.en.pdf)を用意しています。
+**1.1.1（2026-10-17）**。現在の予定と削除履歴が同じIDを持つ場合にZIP保存できない問題を修正し、バックアップの結果を各操作の近くへ表示します。保存先指定、ZIPバックアップ／復元、自動バックアップ、共有データ保護は1.1.0から利用できます。Store・Vectorは審査・更新完了後の配信になります。新機能の利用には1.1.0以降が必要です。アプリUIは日本語です。[日本語操作説明書](docs/Koyomado操作説明書.pdf)と[英語操作説明書](docs/Koyomado-Manual.en.pdf)を用意しています。
 
 - 公式ページ: https://ytec.cloudfree.jp/forge/projects/koyomado/
 - Microsoft Store（推奨）: https://apps.microsoft.com/detail/9P6WFRBWG8X5
-- ポータブル版: https://github.com/ytec-forge-commits/ytec-calendar/releases/tag/v1.1.0
+- ポータブル版: https://github.com/ytec-forge-commits/ytec-calendar/releases/tag/v1.1.1
 - 対応OS: Windows 10 / 11（64bit）
 - ライセンス: Apache License 2.0
 
@@ -38,7 +38,7 @@ Koyomadoは、Windowsのデスクトップへウィジェットのように置�
 
 ## 初回の使い方
 
-1. 普段使いには[Microsoft Store版](https://apps.microsoft.com/detail/9P6WFRBWG8X5)をインストールします。持ち運んで使う場合は、[ポータブル版](https://github.com/ytec-forge-commits/ytec-calendar/releases/tag/v1.1.0)のZIPを今後使う場所へ展開します。
+1. 普段使いには[Microsoft Store版](https://apps.microsoft.com/detail/9P6WFRBWG8X5)をインストールします。持ち運んで使う場合は、[ポータブル版](https://github.com/ytec-forge-commits/ytec-calendar/releases/tag/v1.1.1)のZIPを今後使う場所へ展開します。
 2. Store版はスタートメニュー、ポータブル版は`koyomado.exe`から起動します。
 3. 右上の歯車から、表示方法とWindows自動起動を好みに合わせて設定します。
 4. ウィンドウを好きな位置とサイズへ調整します。同じモニター構成では、次回からその位置で開きます。
@@ -145,7 +145,7 @@ Google連携は復元後にOFFになります。OAuth設定の再読込・再認
 
 #### 自己署名版とStore版の間で移行する
 
-両方がZIP機能を備えた1.1.0以降なら、自己署名ポータブル版→Store版、Store版→自己署名ポータブル版とも同じ手順です。移行元での編集を止め、設定からバックアップZIPを保存し、移行先でそのZIPを空の専用フォルダーへ復元します。**アプリ配布用ZIPをバックアップとしては読み込めません。** 元データとZIPは残し、予定・複数日・繰り返し・通知音を確認してから常用先を決めます。Google認証と自動バックアップ設定は移行先で再設定します。Store版のアンインストール前はZIPをLocalStateの外へ保存してください。旧1.0.0からはデータを保全して先に更新するか、上記の保存先指定で既存dataを参照します。
+移行元・移行先を修正版1.1.1以降へ更新すれば、自己署名ポータブル版→Store版、Store版→自己署名ポータブル版とも同じ手順です。移行元での編集を止め、設定からバックアップZIPを保存し、移行先でそのZIPを空の専用フォルダーへ復元します。**アプリ配布用ZIPをバックアップとしては読み込めません。** 元データとZIPは残し、予定・複数日・繰り返し・通知音を確認してから常用先を決めます。Google認証と自動バックアップ設定は移行先で再設定します。Store版のアンインストール前はZIPをLocalStateの外へ保存してください。旧1.0.0からはデータを保全して先に更新するか、上記の保存先指定で既存dataを参照します。
 
 自動バックアップはPCごとに有効化し、別の保存先フォルダー、毎日・毎週（月曜区切り）・毎月（1日区切り）、残す世代数1～100（初期10）を指定します。起動中に約60秒ごとに期限を確認し、各期間1回作成します。終了中に期限が来た分は次回起動時に1回作成します。新しいZIPの保存・再読込・照合が成功した後だけ、この設定で作成し内容が変わっていない古いZIPを整理します。手動ZIPや別の設定のZIPは対象外です。保存先変更で残った旧フォルダーのZIP、整理を安全に行えなかったZIP、クラッシュ時の未登録ZIPは残る場合があり、設定のエラー表示も確認してください。予定の履歴JSONにはこの世代制限を適用しません。
 
@@ -185,7 +185,7 @@ Windows SDKのMakeAppxを使用します。Partner Centerで割り当てられ�
 
 ```powershell
 npm run tauri:build
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-msix.ps1 -SkipBuild -PackageVersion 1.1.0.0 -CreateUpload
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-msix.ps1 -SkipBuild -PackageVersion 1.1.1.0 -CreateUpload
 npm run test:store-submission
 ```
 
