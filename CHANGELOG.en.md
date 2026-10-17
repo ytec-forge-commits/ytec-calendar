@@ -2,6 +2,7 @@
 
 ## 1.1.1 - 2026-10-17
 
+- Update rustls to 0.23.45 for the TLS 1.3 handshake validation fix used by Google synchronization.
 - Fix ZIP backup/restore validation rejecting legitimate shared IDs between active events and deletion history, including repeated deletions of the same event.
 - Preserve event IDs and every history record; continue rejecting duplicate active IDs, empty IDs and invalid archives.
 - Show manual backup, restore and automatic backup results beside their respective controls and scroll them into view.
