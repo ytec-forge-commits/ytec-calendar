@@ -1,5 +1,11 @@
 # Koyomado changelog
 
+## 1.1.3 - 2026-10-17
+
+- Open the bundled PDF user guide from Settings using Windows' default viewer, without a network connection or Google sign-in.
+- Center the contact link on the Japanese guide's cover.
+- Calendar format v5, backup ZIP format v1 and existing data compatibility are unchanged.
+
 ## 1.1.2 - 2026-10-17
 
 - Prevent Google reconnection from importing a retained local event with a duplicate internal ID. Reconcile unchanged copies within the same recurrence family; preserve changed copies with distinct IDs.

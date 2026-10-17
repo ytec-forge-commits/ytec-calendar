@@ -58,6 +58,7 @@ import { GoogleSettings } from "./GoogleSettings";
 import { sameData } from "./lib/dataSafety";
 import { StorageSettings } from "./StorageSettings";
 import { BackupSettings } from "./BackupSettings";
+import { ManualHelp } from "./ManualHelp";
 import { runDueBackup } from "./lib/store";
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
@@ -1671,6 +1672,7 @@ function SettingsDialog({ settings, saveError, onStorageChanged, onStorageBusyCh
         <header className="dialog-header"><div><p className="section-kicker">PREFERENCES</p><h2 id="settings-dialog-title">表示・通知・起動の設定</h2></div><button className="close-button" onClick={() => void closeSettings()} aria-label="閉じる">×</button></header>
         <div className="settings-body" inert={storageBusy}>
           {saveError && <p className="form-error" role="alert">{saveError}</p>}
+          <ManualHelp />
           <section className="settings-section">
             <div className="settings-heading"><div><h3>背景テーマ</h3><p>8つの落ち着いた配色から選べます。</p></div></div>
             <div className="theme-grid">
