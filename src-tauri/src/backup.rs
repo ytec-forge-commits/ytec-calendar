@@ -862,7 +862,7 @@ mod tests {
     }
 
     #[test]
-    fn backup_still_rejects_duplicate_live_event_ids_without_changing_the_source() {
+    fn backup_recovers_duplicate_live_ids_and_keeps_all_records_and_original_bytes() {
         let root = area("duplicate-live-id");
         let source = root.join("source");
         seed(&source);
@@ -879,11 +879,40 @@ mod tests {
         fs::write(&path, serde_json::to_vec(&data).unwrap()).unwrap();
         let original = fs::read(&path).unwrap();
         let archive = root.join("backup.zip");
-        assert!(export_to(&source, &archive).is_err());
-        assert!(!archive.exists());
-        assert_eq!(fs::read(&path).unwrap(), original);
-        // Empty IDs are still corrupt, whether in the live calendar or history.
-        let mut empty = data.events[0].clone();
+        export_to(&source, &archive).unwrap();
+        let target = root.join("restored");
+        fs::create_dir(&target).unwrap();
+        let restored = restore_to(&archive, &target).unwrap();
+        assert_eq!(restored.events.len(), 2);
+        assert_ne!(restored.events[0].id, restored.events[1].id);
+        let preserved: Vec<_> = fs::read_dir(&source)
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|e| {
+                e.file_name()
+                    .to_string_lossy()
+                    .starts_with("calendar-data.before-id-repair.")
+            })
+            .collect();
+        assert_eq!(preserved.len(), 1);
+        assert_eq!(fs::read(preserved[0].path()).unwrap(), original);
+    }
+
+    #[test]
+    fn empty_live_and_history_ids_are_rejected_without_overwriting_the_source() {
+        let root = area("empty-id");
+        let source = root.join("source");
+        seed(&source);
+        let path = source.join("calendar-data.json");
+        let mut data = load_app_data_from_path(&path).unwrap();
+        let mut empty: CalendarEvent = serde_json::from_value(serde_json::json!({
+            "id":"", "title":"synthetic", "date":"2026-10-17", "endDate":"2026-10-17",
+            "allDay":true, "startTime":"", "endTime":"", "location":"", "notes":"",
+            "style":{"color":"#83a9c2"},
+            "createdAt":"2026-10-01T00:00:00Z", "updatedAt":"2026-10-17T00:00:00Z"
+        }))
+        .unwrap();
+        let archive = root.join("backup.zip");
         empty.id.clear();
         for deleted in [false, true] {
             data.events.clear();
