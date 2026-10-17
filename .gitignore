@@ -37,6 +37,7 @@ data/calendar-data.lock
 data/calendar-data.json.tmp
 data/calendar-data.corrupt-*.json
 data/calendar-data.v*.backup.json
+data/calendar-data.before-id-repair.*.json
 data/google-restore-state*.json
 data/notification-sounds/
 data/.koyomado-migration-*

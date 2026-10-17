@@ -1299,26 +1299,50 @@ fn merge_remote_event(
             .private
             .get("koyomadoId")
             .filter(|id| !id.is_empty());
-        let recovery_index = koyomado_id.and_then(|id| {
-            data.events.iter().position(|event| {
-                event.id == *id
-                    && event.sync_targets.contains(&account.id)
-                    && !event
-                        .google_links
-                        .iter()
-                        .any(|link| link.account_id == account.id)
-                    && remote_matches_local(remote, event)
+        let recovery_index = koyomado_id
+            .and_then(|id| {
+                data.events.iter().position(|event| {
+                    event.id == *id
+                        && event.sync_targets.contains(&account.id)
+                        && event.recurrence_exception.as_ref().map(|e| &e.master_id)
+                            == master_id.as_ref()
+                        && !event
+                            .google_links
+                            .iter()
+                            .any(|link| link.account_id == account.id)
+                        && remote_matches_local(remote, event)
+                })
             })
-        });
+            .or_else(|| {
+                // Disconnect retains Google-derived records locally. Reattach an
+                // unchanged copy on reconnect instead of importing the same ID.
+                let stable_id = stable_local_event_id(&account.id, &remote.id);
+                data.events.iter().position(|event| {
+                    event.id == stable_id
+                        && event.recurrence_exception.as_ref().map(|e| &e.master_id)
+                            == master_id.as_ref()
+                        && matches!(event.origin, EventOrigin::Local)
+                        && event.google_links.is_empty()
+                        && event.sync_targets.is_empty()
+                        && event.sync_conflict.is_none()
+                        && remote_matches_local(remote, event)
+                        && recurrence_lines(event).is_ok_and(|lines| lines == remote.recurrence)
+                })
+            });
         if let Some(index) = recovery_index {
             let local_updated_at = data.events[index].updated_at.clone();
+            if !data.events[index].sync_targets.contains(&account.id) {
+                data.events[index].sync_targets.push(account.id.clone());
+            }
             update_link(
                 &mut data.events[index],
                 account,
                 google_link(account, remote, &local_updated_at),
             );
         } else {
-            let imported = local_event_from_google(account, remote, master_id)?;
+            let mut imported = local_event_from_google(account, remote, master_id)?;
+            let mut occupied = data.events.iter().map(|e| e.id.clone()).collect();
+            imported.id = super::event_ids::unused_id(&imported.id, &mut occupied);
             data.events.push(imported);
             summary.pulled += 1;
         }
@@ -1552,11 +1576,30 @@ fn reconcile_restored_events(
         )
     {
         let local_id = event.extended_properties.private.get("koyomadoId");
-        let existing = data.events.iter().position(|local| {
-            remote_link_index(local, account, &event.id).is_some()
-                || local_id == Some(&local.id)
-                || local.id == stable_local_event_id(&account.id, &event.id)
-        });
+        // A local ID may have belonged to a detached copy before ID repair.
+        // The full Google identity is stronger evidence than that old hint.
+        let existing = data
+            .events
+            .iter()
+            .position(|local| remote_link_index(local, account, &event.id).is_some())
+            .or_else(|| {
+                data.events.iter().position(|local| {
+                    !matched.contains(&local.id)
+                        && !local.google_links.iter().any(|link| {
+                            link.account_id == account.id && link.calendar_id == account.calendar_id
+                        })
+                        && local_id == Some(&local.id)
+                })
+            })
+            .or_else(|| {
+                data.events.iter().position(|local| {
+                    !matched.contains(&local.id)
+                        && !local.google_links.iter().any(|link| {
+                            link.account_id == account.id && link.calendar_id == account.calendar_id
+                        })
+                        && local.id == stable_local_event_id(&account.id, &event.id)
+                })
+            });
         let master = event
             .recurring_event_id
             .as_deref()
@@ -1588,6 +1631,8 @@ fn reconcile_restored_events(
             // Tombstones from an old backup must not delete a live remote event.
             data.deleted_events
                 .retain(|d| remote_link_index(&d.event, account, &event.id).is_none());
+            let mut occupied = data.events.iter().map(|e| e.id.clone()).collect();
+            imported.id = super::event_ids::unused_id(&imported.id, &mut occupied);
             matched.insert(imported.id.clone());
             data.events.push(imported);
         }
@@ -1975,6 +2020,138 @@ mod tests {
             updated: "2026-01-02T00:00:00Z".into(),
             extended_properties: GoogleExtendedProperties::default(),
         }
+    }
+
+    #[test]
+    fn reconnecting_an_unchanged_google_event_reuses_its_detached_copy() {
+        let account = account();
+        let remote = remote_event("reconnected", "2026-10-17");
+        let mut data = AppData::default();
+        let mut summary = GoogleSyncSummary::default();
+        merge_remote_event(&mut data, &account, &remote, &mut summary).unwrap();
+        let original_id = data.events[0].id.clone();
+        for _ in 0..2 {
+            // Mirrors App.updateSettings after disconnecting an account.
+            strip_account_link(&mut data.events[0], &account.id);
+            merge_remote_event(&mut data, &account, &remote, &mut summary).unwrap();
+            assert_eq!(
+                data.events.len(),
+                1,
+                "reconnect must not duplicate the local record"
+            );
+            assert_eq!(data.events[0].id, original_id);
+            assert_eq!(data.events[0].google_links[0].event_id, "reconnected");
+        }
+    }
+
+    #[test]
+    fn reconnecting_a_changed_google_event_preserves_both_copies_with_distinct_ids() {
+        let account = account();
+        let mut remote = remote_event("reconnected-edited", "2026-10-17");
+        let mut detached = local_event_from_google(&account, &remote, None).unwrap();
+        strip_account_link(&mut detached, &account.id);
+        detached.notes = "local changes must survive".into();
+        remote.summary = "remote changes must survive".into();
+        let mut data = AppData {
+            events: vec![detached.clone()],
+            ..Default::default()
+        };
+        merge_remote_event(
+            &mut data,
+            &account,
+            &remote,
+            &mut GoogleSyncSummary::default(),
+        )
+        .unwrap();
+        assert_eq!(data.events.len(), 2);
+        assert_eq!(
+            serde_json::to_value(&data.events[0]).unwrap(),
+            serde_json::to_value(&detached).unwrap()
+        );
+        assert_eq!(data.events[1].title, "remote changes must survive");
+        assert_ne!(data.events[0].id, data.events[1].id);
+        assert_eq!(
+            data.events[1].google_links[0].event_id,
+            "reconnected-edited"
+        );
+    }
+
+    #[test]
+    fn reconnecting_a_changed_parent_keeps_old_and_new_exception_families_separate() {
+        let account = account();
+        let mut parent = remote_event("reconnected-parent", "2026-10-17");
+        parent.recurrence = vec!["RRULE:FREQ=DAILY".into()];
+        let mut child = remote_event("reconnected-child", "2026-10-18");
+        child.recurring_event_id = Some(parent.id.clone());
+        child.original_start_time = Some(GoogleEventDateTime {
+            date: Some("2026-10-18".into()),
+            ..Default::default()
+        });
+        let mut data = AppData::default();
+        let mut summary = GoogleSyncSummary::default();
+        merge_remote_event(&mut data, &account, &parent, &mut summary).unwrap();
+        merge_remote_event(&mut data, &account, &child, &mut summary).unwrap();
+        let old_parent_id = data.events[0].id.clone();
+        for event in &mut data.events {
+            strip_account_link(event, &account.id);
+        }
+        data.events[0].notes = "keep detached parent edit".into();
+        merge_remote_event(&mut data, &account, &parent, &mut summary).unwrap();
+        merge_remote_event(&mut data, &account, &child, &mut summary).unwrap();
+        assert_eq!(
+            data.events.len(),
+            4,
+            "old parent and exception must both survive"
+        );
+        assert_eq!(
+            data.events[1]
+                .recurrence_exception
+                .as_ref()
+                .unwrap()
+                .master_id,
+            old_parent_id
+        );
+        assert!(data.events[1].google_links.is_empty());
+        assert_eq!(
+            data.events[3]
+                .recurrence_exception
+                .as_ref()
+                .unwrap()
+                .master_id,
+            data.events[2].id
+        );
+        assert_eq!(
+            data.events[3].google_links[0].recurring_event_id.as_deref(),
+            Some("reconnected-parent")
+        );
+    }
+
+    #[test]
+    fn restore_matches_the_remote_link_before_a_detached_copys_old_local_id() {
+        let account = account();
+        let mut remote = remote_event("linked-remote", "2026-10-17");
+        remote
+            .extended_properties
+            .private
+            .insert("koyomadoId".into(), "old-local-id".into());
+        let detached = local_event("old-local-id", "2026-10-16");
+        let mut linked = local_event_from_google(&account, &remote, None).unwrap();
+        linked.id = "recovered-linked-id".into();
+        let mut data = AppData {
+            events: vec![detached.clone(), linked],
+            ..Default::default()
+        };
+        let mut summary = GoogleSyncSummary::default();
+        reconcile_restored_events(&mut data, &account, &[remote], &mut summary).unwrap();
+        assert_eq!(data.events.len(), 2);
+        assert_eq!(
+            serde_json::to_value(&data.events[0]).unwrap(),
+            serde_json::to_value(&detached).unwrap()
+        );
+        assert_eq!(data.events[1].id, "recovered-linked-id");
+        assert_eq!(data.events[1].google_links[0].event_id, "linked-remote");
+        assert_eq!(summary.pushed, 0);
+        assert_eq!(summary.deleted, 0);
     }
 
     #[test]

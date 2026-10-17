@@ -21,6 +21,162 @@ fn event(id: &str) -> CalendarEvent {
 }
 
 #[test]
+fn duplicate_active_ids_are_recovered_without_discarding_records_or_the_original_file() {
+    let path = test_path("duplicate-active-id-recovery");
+    let first = event("google-detached");
+    let mut edited = first.clone();
+    edited.notes = "preserve this distinct local copy".into();
+    let mut data = AppData {
+        events: vec![first.clone(), first.clone(), edited],
+        ..Default::default()
+    };
+    data.events.push(event("google-detached-recovered-1"));
+    let original = serde_json::to_vec(&data).unwrap();
+    fs::write(&path, &original).unwrap();
+    let recovered = load_app_data_from_path(&path).unwrap();
+    assert_eq!(recovered.events.len(), 4);
+    assert_eq!(
+        recovered
+            .events
+            .iter()
+            .map(|e| &e.id)
+            .collect::<HashSet<_>>()
+            .len(),
+        4
+    );
+    assert_eq!(
+        serde_json::to_value(&recovered.events[0]).unwrap(),
+        serde_json::to_value(&first).unwrap()
+    );
+    for (before, after) in data.events.iter().zip(&recovered.events) {
+        let mut restored = after.clone();
+        restored.id = before.id.clone();
+        assert_eq!(
+            serde_json::to_value(&restored).unwrap(),
+            serde_json::to_value(before).unwrap(),
+            "only local IDs may change"
+        );
+    }
+    let preserved: Vec<_> = fs::read_dir(path.parent().unwrap())
+        .unwrap()
+        .filter_map(Result::ok)
+        .filter(|e| {
+            e.file_name()
+                .to_string_lossy()
+                .starts_with("calendar-data.before-id-repair.")
+        })
+        .collect();
+    assert_eq!(preserved.len(), 1);
+    assert_eq!(fs::read(preserved[0].path()).unwrap(), original);
+    let saved = fs::read(&path).unwrap();
+    assert_eq!(
+        serde_json::to_value(load_app_data_from_path(&path).unwrap()).unwrap(),
+        serde_json::to_value(&recovered).unwrap()
+    );
+    assert_eq!(
+        fs::read(&path).unwrap(),
+        saved,
+        "reloading must be idempotent"
+    );
+}
+
+#[test]
+fn duplicate_recurring_parent_recovery_uses_google_identity_and_preserves_local_references() {
+    let path = test_path("duplicate-parent-recovery");
+    let mut detached = event("parent");
+    detached.recurrence = Some(default_yearly_recurrence());
+    let mut linked = detached.clone();
+    linked.google_links = vec![serde_json::from_value(serde_json::json!({
+        "accountId":"synthetic-account", "calendarId":"primary", "eventId":"remote-parent",
+        "localUpdatedAt": linked.updated_at
+    }))
+    .unwrap()];
+    let mut child = event("linked-child");
+    child.recurrence_exception = Some(RecurrenceException {
+        master_id: "parent".into(),
+        original_date: "2026-10-17".into(),
+    });
+    child.google_links = vec![serde_json::from_value(serde_json::json!({
+        "accountId":"synthetic-account", "calendarId":"primary", "eventId":"remote-child",
+        "recurringEventId":"remote-parent", "localUpdatedAt":child.updated_at
+    }))
+    .unwrap()];
+    let mut local_child = event("local-child");
+    local_child.recurrence_exception = child.recurrence_exception.clone();
+    let data = AppData {
+        events: vec![detached, linked, child, local_child],
+        ..Default::default()
+    };
+    fs::write(&path, serde_json::to_vec(&data).unwrap()).unwrap();
+    let recovered = load_app_data_from_path(&path).unwrap();
+    assert_eq!(recovered.events.len(), 4);
+    assert_eq!(
+        recovered.events[2]
+            .recurrence_exception
+            .as_ref()
+            .unwrap()
+            .master_id,
+        recovered.events[1].id
+    );
+    assert_eq!(
+        recovered.events[3]
+            .recurrence_exception
+            .as_ref()
+            .unwrap()
+            .master_id,
+        "parent"
+    );
+    assert_eq!(
+        serde_json::to_value(&recovered.events[1].google_links).unwrap(),
+        serde_json::to_value(&data.events[1].google_links).unwrap()
+    );
+    assert_eq!(recovered.events[1].updated_at, data.events[1].updated_at);
+}
+
+#[test]
+fn failed_original_id_backup_blocks_repair_without_touching_the_primary() {
+    use sha2::{Digest, Sha256};
+    let path = test_path("id-backup-failure");
+    let duplicate = event("duplicate");
+    let data = AppData {
+        events: vec![duplicate.clone(), duplicate],
+        ..Default::default()
+    };
+    let original = serde_json::to_vec(&data).unwrap();
+    fs::write(&path, &original).unwrap();
+    let hash = format!("{:x}", Sha256::digest(&original));
+    let backup = path.with_file_name(format!("calendar-data.before-id-repair.{hash}.json"));
+    fs::write(&backup, b"incomplete previous backup").unwrap();
+    assert!(load_app_data_from_path(&path).is_err());
+    assert_eq!(fs::read(&path).unwrap(), original);
+    assert_eq!(fs::read(&backup).unwrap(), b"incomplete previous backup");
+}
+
+#[test]
+fn id_repair_refuses_a_sync_replacement_of_the_parsed_source() {
+    let path = test_path("id-repair-source-replaced");
+    let duplicate = event("duplicate");
+    let parsed = AppData {
+        events: vec![duplicate.clone(), duplicate],
+        ..Default::default()
+    };
+    let expected = serde_json::to_vec(&parsed).unwrap();
+    fs::write(&path, &expected).unwrap();
+    let replacement = serde_json::to_vec(&AppData {
+        events: vec![event("new-remote-record")],
+        ..Default::default()
+    })
+    .unwrap();
+    // A Drive client can replace the primary without taking our .lock file.
+    fs::write(&path, &replacement).unwrap();
+    assert!(
+        event_ids::preserve_original(&path, &expected).is_err(),
+        "repair must reject a different source snapshot"
+    );
+    assert_eq!(fs::read(&path).unwrap(), replacement);
+}
+
+#[test]
 fn missing_primary_recovers_committed_backup() {
     let path = test_path("missing-primary");
     let mut data = AppData::default();
