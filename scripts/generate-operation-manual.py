@@ -30,10 +30,10 @@ from reportlab.platypus import (
 ROOT = Path(__file__).resolve().parents[1]
 ASSET_DIR = ROOT / "docs" / "manual-assets"
 VERSION = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))["version"]
-RELEASE_DATE = "改訂: 2026年9月29日"
+RELEASE_DATE = "2026年10月17日"
 OFFICIAL_URL = "https://ytec.cloudfree.jp/forge/projects/koyomado/"
-CONTACT_URL = "https://ytec.cloudfree.jp/forge/contact/"
 SOURCE_URL = "https://github.com/ytec-forge-commits/ytec-calendar"
+CONTACT_URL = "https://ytec.cloudfree.jp/forge/contact/"
 GOOGLE_CONSOLE_URL = "https://console.cloud.google.com/"
 GOOGLE_PROJECT_CREATE_URL = "https://console.cloud.google.com/projectcreate"
 GOOGLE_CALENDAR_API_URL = "https://console.cloud.google.com/apis/library/calendar-json.googleapis.com"
@@ -44,7 +44,7 @@ GOOGLE_CREDENTIALS_URL = "https://developers.google.com/workspace/guides/create-
 GOOGLE_USER_DATA_URL = "https://developers.google.com/terms/api-services-user-data-policy"
 GOOGLE_AUDIENCE_HELP_URL = "https://support.google.com/cloud/answer/15549945?hl=ja"
 GOOGLE_VERIFICATION_HELP_URL = "https://support.google.com/cloud/answer/13464323?hl=ja"
-TOTAL_PAGES = 27
+TOTAL_PAGES = 31
 
 PAGE_W, PAGE_H = A4
 MARGIN_X = 17 * mm
@@ -564,11 +564,10 @@ def build_story(styles: dict[str, ParagraphStyle]) -> list:
             ("この説明書", f"Koyomado v{VERSION}<br/>{RELEASE_DATE}"),
             ("保存と通信", "保存先は版ごとに分離<br/>Google連携は任意・初期OFF"),
         ], styles, [PURPLE_PALE, GREEN_PALE, SKY_PALE]),
-        Spacer(1, 3 * mm),
+        Spacer(1, 5 * mm),
         p(f'<link href="{OFFICIAL_URL}" color="#5f5278">公式ページ: {OFFICIAL_URL}</link>', styles["link"]),
         p(f'<link href="{SOURCE_URL}" color="#5f5278">ソースコード: {SOURCE_URL}</link>', styles["link"]),
-        p(f'<link href="{CONTACT_URL}" color="#5f5278">お問い合わせ: {CONTACT_URL}</link>', styles["link"]),
-        p("再公開にあたりソース・配布物・説明書を再点検し、実行ファイルと日英説明書を新たに生成しています。アプリの機能と保存形式はv1.0.0から変更していません。", styles["muted"]),
+        url_link("お問い合わせ", "https://ytec.cloudfree.jp/forge/contact/", styles),
         PageBreak(),
     ])
 
@@ -832,11 +831,11 @@ def build_story(styles: dict[str, ParagraphStyle]) -> list:
         data_table([
             ("Store版の更新", "Microsoft Storeから更新。dataは上記のMSIX LocalStateに残ります。アンインストール前は別の場所へバックアップします"),
             ("ポータブル版の更新", "終了後にdataをバックアップし、新しいZIPへdataをコピー。自動起動は登録し直します"),
-            ("版を切り替える", "両方を終了。Store版は一度起動して終了後、元のdataの中身を新しい保存先へコピー。元データはバックアップ"),
-            ("USB / Google Drive", "ポータブル版だけフォルダーごと移動。同じフォルダーを複数PCから同時起動しません"),
+            ("版を切り替える", "1.1.0以降は設定からZIPを保存し、移行先の空フォルダーへ復元。元データとZIPは残ります。後半の移行手順を参照"),
+            ("USB / Google Drive", "両版ともWindowsから利用できる保存先を指定可能。同時起動時は全PCの版を揃え、同期完了を確認します"),
         ], styles, 46 * mm),
         Spacer(1, 3 * mm),
-        card("二つの版を同時起動しない", "Store版とポータブル版は保存先が別です。同じGoogle予定の重複同期や二重通知を避けるため、移行確認後は普段使う一方だけを起動してください。別PCではGoogleアカウントを再認証します。", styles, ROSE_PALE),
+        card("同時起動時の注意", "同時起動は可能ですが、旧版との混在や同じ予定の同時編集を避け、Google Driveの同期完了を確認してください。同じGoogle予定の重複同期・二重通知にも注意し、ZIP移行中は移行元での編集を止めます。", styles, ROSE_PALE),
         PageBreak(),
     ])
 
@@ -897,7 +896,7 @@ def build_story(styles: dict[str, ParagraphStyle]) -> list:
     ])
 
     # 14: Google Cloud project and API
-    page_title(story, styles, "GOOGLE CLOUD 1", "プロジェクト作成とCalendar API", "画像は2026年8月時点の説明用画面です。個人利用・Testingの期限・ユーザー上限は2026年9月29日に公式資料を再確認しました。画面名が異なる場合はGoogleの現行資料も確認してください。")
+    page_title(story, styles, "GOOGLE CLOUD 1", "プロジェクト作成とCalendar API", "以下は2026年8月時点のGoogle Cloud画面名です。表示名が変わった場合は、近い名称の項目を選んでください。")
     story.extend([
         step(1, "Google Cloud Consoleを開く", f'<link href="{GOOGLE_CONSOLE_URL}" color="#5f5278">{GOOGLE_CONSOLE_URL}</link>へ、連携に使うGoogleアカウントでログインします。', styles),
         step(2, "プロジェクトを作成", "「新しいプロジェクト」を開き、名前をKoyomado Personalなどにします。プロジェクトIDは自動生成のままで構いません。作成後、画面上部でそのプロジェクトを選びます。", styles),
@@ -1068,7 +1067,7 @@ def build_story(styles: dict[str, ParagraphStyle]) -> list:
             ("手動", "上部の同期ボタン、または設定の「今すぐ同期」"),
         ], styles, 43 * mm),
         Spacer(1, 4 * mm),
-        card("メインPCとサブPCで使う場合", "各PCへ別々のKoyomadoフォルダーを置き、それぞれで同じGoogleアカウントへ接続する方法が安全です。Googleカレンダーを共通の同期元として使います。同じGoogle Drive上のKoyomadoフォルダーを2台から同時起動するとcalendar-data.jsonが競合するため避けてください。更新トークンはPCごとのWindows資格情報へ保存されるので、各PCで再認証します。", styles, SKY_PALE),
+        card("自宅PCと会社PCで使う場合", "各PCでGoogleを同期元にする方法と、両PCで同じDriveの予定フォルダーを指定する方法があります。同時起動は可能ですが、全PCを修正版へ揃え、編集前後の同期完了を確認し、同じ予定の同時編集を避けてください。まだ届いていない別PCの変更は検知できません。更新トークンはPCごとのWindows資格情報へ保存されます。", styles, SKY_PALE),
         PageBreak(),
     ])
 
@@ -1107,7 +1106,7 @@ def build_story(styles: dict[str, ParagraphStyle]) -> list:
             ("貼り付けが選べない", "先に予定を右クリックして「内容をコピー」を選びます。"),
             ("通知が出ない", "Koyomadoが起動中か、予定の通知時刻、音なし設定、音量を確認。スリープ中や終了中の通知は後からまとめて表示しません。"),
             ("起動時の位置がおかしい", "現在のモニター構成で最後に保存した位置へ戻ります。初めての構成や画面外の位置は自動で見える位置へ戻るため、希望の場所へ移動して終了し直してください。"),
-            ("データが壊れた", "バックアップから自動復旧を試み、壊れたファイルはcorrupt付きの名前で退避します。直らない場合はStore版ならLocalAppData、ポータブル版ならアプリ横のdataへバックアップを戻します。"),
+            ("データが壊れた", "復旧可能なバックアップを確認します。復旧できない場合は空初期化を止めます。全PCで編集を止め、元フォルダーを保全してから、ZIPを別の空フォルダーへ復元してください。"),
         ], styles, 46 * mm),
         Spacer(1, 4 * mm),
         p("操作早見表", styles["h2"]),
@@ -1120,9 +1119,56 @@ def build_story(styles: dict[str, ParagraphStyle]) -> list:
         p("仕様上の範囲", styles["h2"]),
         p("Koyomadoには、印刷、予定のPDF出力、アクセス解析、独自クラウドサーバーはありません。外部通信は利用者が任意で有効にするGoogleカレンダー連携だけです。予定データとOAuthクライアント設定は暗号化されないため、機密情報やパスワードの保存には使用しないでください。祝日は1970年から2050年までの内蔵データを使います。", styles["body"]),
         card("お問い合わせ前に用意すると役立つ情報", "Koyomadoのバージョン、Windowsのバージョン、発生した操作、表示されたメッセージ、再現手順。予定の本文や個人情報は送らないでください。", styles, SAND_PALE),
-        url_link("お問い合わせ", CONTACT_URL, styles),
         Spacer(1, 3 * mm),
         p("公式ページとソースコードは表紙に記載しています。利用条件はApache License 2.0のLICENSE.txt、Google連携の扱いはPRIVACY.mdをご確認ください。", styles["muted"]),
+    ])
+    story.extend([PageBreak()])
+    page_title(story, styles, "DATA LOCATION", "予定データの保存先を指定する", "Store版・自己署名ポータブル版の両方で、Windowsから読み書きできる専用フォルダーを指定できます。")
+    story.extend([
+        step(1, "空の専用フォルダーを用意", "Google DriveのWeb URLではなく、このPCにマウントされたフォルダーを使います。既存データを参照するときはcalendar-data.jsonのあるフォルダーを選びます。", styles),
+        step(2, "歯車から保存先を確認", "「予定データの保存先」で「フォルダーを選択」、または絶対パスを入力して「このフォルダーを確認」を押します。予定件数を確認する段階では切り替わりません。", styles),
+        step(3, "コピーまたは既存データ利用を確定", "空フォルダーでは「現在のデータをコピーして切り替える」。予定のあるフォルダーでは「選択先の既存データを使う」。勝手に統合・上書きせず、コピー・照合成功後に切り替えます。", styles),
+        step(4, "再起動せず予定を確認", "切替後に予定と通知音を確認します。元フォルダーはそのまま残ります。編集中の旧保存先の入力は新保存先へ書き込まず、入力を保持して知らせます。", styles),
+        Spacer(1, 4 * mm),
+        card("接続できない場合", "未接続・未同期のフォルダーでは空の予定を作らず、標準へ勝手に戻しません。ドライブと同期完了を確認してください。途中のコピーも自動削除せず残すので、元を保全し別の空フォルダーでやり直します。", styles, ROSE_PALE),
+        Spacer(1, 3 * mm),
+        data_table([("Store版の指定", "LocalState/Koyomado/storage-location.json"), ("ポータブル版の指定", "PC側LocalAppDataのインストール場所別設定"), ("移動しない情報", "ウィンドウ位置、Windows資格情報のGoogleトークン"), ("標準へ戻す", "「標準の保存先を指定」で内容を確認して切替")], styles, 48 * mm),
+        PageBreak(),
+    ])
+    page_title(story, styles, "ZIP BACKUP", "重要データをZIPで保存する", "予定・削除済み予定・外観などの設定・ユーザー通知音を、アプリ内から1つのZIPへ保存します。")
+    story.extend([
+        step(1, "他PCでの編集を止め、同期完了を確認", "共有フォルダー利用時は、まだ届いていない変更を含められません。切替や移行の前は各PCの同期完了を確認します。", styles),
+        step(2, "保存先を指定", "設定の「ZIPバックアップ・復元」で「ZIPの保存先を選択」。予定データのフォルダー外にある、未使用のZIPファイル名を指定します。", styles),
+        step(3, "ZIPを保存する", "「ZIPを保存する」を押し、「ZIPを保存・照合しました」を確認します。同名ファイルは上書きしません。大切なZIPは予定データと別の媒体にも保管してください。", styles),
+        Spacer(1, 4 * mm),
+        data_table([("含むもの", "現在の予定・削除済み予定・外観設定・通知音・Google予定との紐付け"), ("含まないもの", "OAuthクライアント、トークン、PCごとの保存先・位置・自動設定、過去の履歴"), ("形式と上限", "ZIP形式v1。合計256MB、1ファイル32MB、2048項目まで"), ("暗号化", "暗号化しません。予定・アカウント情報を含むため非公開で管理")], styles, 44 * mm),
+        Spacer(1, 4 * mm),
+        card("再インストール前に", "Store版のアンインストールではLocalStateが失われる場合があります。ZIPはアプリ専用領域の外へ保存し、読めることを確認してから再インストールしてください。OAuthクライアントJSONの原本は別途保管します。", styles, SAND_PALE),
+        PageBreak(),
+    ])
+    page_title(story, styles, "RESTORE AND MIGRATE", "ZIP復元・Store版との相互移行", "1.1.0以降の自己署名版→Store版、Store版→自己署名版とも、同じZIP形式で移行できます。公開済み1.0.0にはZIP機能がありません。")
+    story.extend([
+        step(1, "移行元でZIPを保存", "元の予定データを残し、移行元での編集を止めます。配布用のアプリZIPではなく、設定から作ったバックアップZIPを使います。", styles),
+        step(2, "移行先でZIPと空フォルダーを選ぶ", "「復元するZIPを選択」と「復元先フォルダーを選択」を使い、「ZIPの内容を確認」を押します。現在の予定へ上書きせず、空の専用フォルダーへ復元します。", styles),
+        step(3, "日時・件数を確認して確定", "確認段階では未復元です。「確認したZIPを復元して切り替える」を押すと展開・照合後に切り替わります。再起動は不要。元の予定とZIPは残ります。", styles),
+        step(4, "予定と音を確認、Googleは再設定", "予定・期間・繰り返し・通知音を確認します。Google連携はOFFとなるため、OAuthクライアントを再読込し、各アカウントを再認証します。自動バックアップ設定も移行先で指定します。", styles),
+        Spacer(1, 3 * mm),
+        card("復元後のGoogle初回同期", "各アカウントの最初の同期は全件受信とID照合だけで、Google側へ追加・更新・削除しません。紐付く予定はGoogleの最新を優先し、未照合の復元予定は同期対象から外してローカルに残します。古い削除を送信しません。元内容はZIPに残り、2回目以降は通常同期へ戻ります。", styles, GREEN_PALE),
+        Spacer(1, 3 * mm),
+        card("復元できない場合", "破損・不正パス・非対応形式・照合不一致を拒否します。失敗先を普段の予定として使わず、元データとZIPを保全して別の空フォルダーでやり直してください。", styles, ROSE_PALE),
+        PageBreak(),
+    ])
+    page_title(story, styles, "AUTOMATIC BACKUP", "自動バックアップと残す世代数", "保存先・間隔・世代数はPCごとの設定です。復元後や別PCでは改めて指定します。")
+    story.extend([
+        step(1, "自動バックアップを有効化", "設定で「自動バックアップを有効にする」をONにし、予定データと別の専用フォルダーを指定します。", styles),
+        step(2, "作成間隔と世代数を選ぶ", "毎日、毎週（月曜区切り）、毎月（1日区切り）から選択。残す世代数は1～100、初期値10です。", styles),
+        step(3, "設定を保存して最終結果を確認", "「自動バックアップ設定を保存」を押し、最終成功とエラーを確認します。起動中に約60秒ごとに期限を確認し、各期間1回作成します。終了中の未実行分は次回起動時に1回作成します。", styles),
+        Spacer(1, 3 * mm),
+        two_cards([("整理するZIP", "新しいZIPの保存・再読込・照合に成功した後だけ、このPCのこの系列で作成した未変更の古いZIPを世代数まで整理します。"), ("残すZIP", "手動ZIP、別系列、改変されたZIPは自動削除しません。削除権限がないものや中断時の未登録ZIPも残る場合があります。")], styles, [GREEN_PALE, SAND_PALE]),
+        Spacer(1, 4 * mm),
+        card("容量とバックアップ先", "ZIPの世代数はcalendar-historyのJSON履歴には適用しません。履歴や手動ZIP、旧保存先のZIPは増える場合があります。残容量とエラーを定期的に確認してください。別フォルダーだけではディスク故障への備えにならないため、重要なZIPは別媒体にも保管します。", styles, ROSE_PALE),
+        Spacer(1, 3 * mm),
+        card("同期サービスについて", "Drive等のクライアントによるファイル同期はGoogleカレンダー連携のON/OFFとは別です。共有範囲を確認し、共有先に機密の予定やOAuth設定を置かないでください。", styles, SKY_PALE),
     ])
     return story
 

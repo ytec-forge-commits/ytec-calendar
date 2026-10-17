@@ -22,7 +22,7 @@ import {
   toDateKey,
   upcomingEvents,
 } from "./lib/calendar";
-import { getAutoStartState, getDataDirectory, loadAppData, saveAppData, setAutoStartState, setSidebarWindowMode, setWindowDisplayMode, syncGoogleCalendars } from "./lib/store";
+import { getAutoStartState, loadAppData, saveAppData, sameDataLocation, setAutoStartState, setSidebarWindowMode, setWindowDisplayMode, syncGoogleCalendars } from "./lib/store";
 import { saveCustomNotificationSound, showMainWindowForNotification } from "./lib/store";
 import {
   BUILT_IN_NOTIFICATION_SOUNDS,
@@ -55,6 +55,10 @@ import {
 } from "./types";
 import koyomadoLogo from "./assets/koyomado-logo.png";
 import { GoogleSettings } from "./GoogleSettings";
+import { sameData } from "./lib/dataSafety";
+import { StorageSettings } from "./StorageSettings";
+import { BackupSettings } from "./BackupSettings";
+import { runDueBackup } from "./lib/store";
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 const EVENT_COLORS = ["#78a88f", "#83a9c2", "#b49ac7", "#d2a36f", "#d7867f", "#92a86c"];
@@ -101,16 +105,34 @@ function App() {
   const [dragState, setDragState] = useState<CalendarDragState | null>(null);
   const [toast, setToast] = useState("");
   const [loadError, setLoadError] = useState("");
+  const [saveError, setSaveError] = useState("");
+  const [storageBusy, setStorageBusy] = useState(false);
   const [syncBusy, setSyncBusy] = useState(false);
   const [notificationQueue, setNotificationQueue] = useState<DueNotification[]>([]);
   const [uiScalePreview, setUiScalePreview] = useState<number | null>(null);
   const dataRef = useRef<AppData | null>(null);
   const interactionActiveRef = useRef(false);
   const syncBusyRef = useRef(false);
+  const saveBusyRef = useRef(false);
+  const storageBusyRef = useRef(false);
   const notificationPlaybackRef = useRef<NotificationPlayback | null>(null);
 
   useEffect(() => {
     loadAppData().then(setData).catch((error: unknown) => setLoadError(String(error)));
+  }, []);
+
+  useEffect(() => {
+    let running = false; let disposed = false;
+    const check = async () => {
+      if (running || storageBusyRef.current || syncBusyRef.current || saveBusyRef.current) return;
+      running = true;
+      try { await runDueBackup(); }
+      catch { if (!disposed) setToast("自動バックアップを完了できませんでした。設定のZIPバックアップ欄で保存先とエラーを確認してください。"); }
+      finally { running = false; }
+    };
+    void check();
+    const timer = window.setInterval(() => void check(), 60_000);
+    return () => { disposed = true; window.clearInterval(timer); };
   }, []);
 
   useEffect(() => {
@@ -121,13 +143,51 @@ function App() {
     interactionActiveRef.current = Boolean(editing || settingsOpen || contextMenu || agendaDate || dragState);
   }, [agendaDate, contextMenu, dragState, editing, settingsOpen]);
 
+  useEffect(() => {
+    let disposed = false;
+    let refreshing = false;
+    const refresh = async () => {
+      if (document.hidden || refreshing || interactionActiveRef.current || syncBusyRef.current || saveBusyRef.current || storageBusyRef.current) return;
+      const before = dataRef.current;
+      if (!before) return;
+      refreshing = true;
+      try {
+        const latest = await loadAppData();
+        // A read already in flight must not replace an edit or a newer save.
+        if (disposed || interactionActiveRef.current || syncBusyRef.current || saveBusyRef.current || storageBusyRef.current || dataRef.current !== before) return;
+        const locationChanged = !sameDataLocation(before, latest);
+        if (locationChanged || !sameData(before, latest)) {
+          dataRef.current = latest;
+          setData(latest);
+          setSaveError("");
+          setToast(locationChanged ? "ほかの画面で変更された予定データの保存先を読み込みました" : "ほかの画面で変更された予定・設定を読み込みました");
+        }
+      } catch {
+        // Do not replace the displayed data with defaults on an unreadable file.
+        if (!disposed) setSaveError("保存データの更新を確認できません。現在の表示と編集中の入力を保持しています。保存先や同期状態を確認してください。");
+      } finally { refreshing = false; }
+    };
+    const interval = window.setInterval(() => void refresh(), 2000);
+    const onRefresh = () => { void refresh(); };
+    window.addEventListener("focus", onRefresh);
+    window.addEventListener("storage", onRefresh);
+    document.addEventListener("visibilitychange", onRefresh);
+    return () => {
+      disposed = true;
+      window.clearInterval(interval);
+      window.removeEventListener("focus", onRefresh);
+      window.removeEventListener("storage", onRefresh);
+      document.removeEventListener("visibilitychange", onRefresh);
+    };
+  }, []);
+
   const runGoogleSync = useCallback(async (announce = false, allowActiveSettings = false) => {
     const current = dataRef.current;
     if (!current?.settings.google.enabled || !current.settings.google.client || !current.settings.google.accounts.some((account) => account.syncEnabled)) {
       if (announce) setToast("同期するGoogleアカウントがありません");
       return false;
     }
-    if (syncBusyRef.current) {
+    if (syncBusyRef.current || saveBusyRef.current || storageBusyRef.current) {
       if (announce) setToast("Googleカレンダーと同期中です");
       return false;
     }
@@ -327,21 +387,25 @@ function App() {
   }, [contextMenu]);
 
   const persist = useCallback(async (next: AppData, message?: string) => {
-    if (syncBusyRef.current) {
+    if (syncBusyRef.current || saveBusyRef.current || storageBusyRef.current || !data) {
       setToast("Googleカレンダーとの同期完了後にもう一度お試しください");
       return false;
     }
+    saveBusyRef.current = true;
     try {
-      await saveAppData(next);
-      dataRef.current = next;
-      setData(next);
+      const saved = await saveAppData(next, data);
+      dataRef.current = saved;
+      setData(saved);
+      setSaveError("");
       if (message) setToast(message);
       return true;
     } catch (error) {
-      setToast(`保存できませんでした: ${String(error)}`);
+      const notice = `保存できませんでした: ${String(error)}`;
+      setToast(notice);
+      setSaveError(notice);
       return false;
-    }
-  }, []);
+    } finally { saveBusyRef.current = false; }
+  }, [data]);
 
   const monthCells = useMemo(() => getMonthCells(displayMonth, today), [displayMonth, today]);
   const holidayMap = useMemo(
@@ -357,6 +421,7 @@ function App() {
       return;
     }
     setSelectedDate(date);
+    setSaveError("");
     setEditing("new");
   };
 
@@ -366,6 +431,7 @@ function App() {
       return;
     }
     setSelectedDate(event.date);
+    setSaveError("");
     setEditing(event);
   };
 
@@ -706,13 +772,22 @@ function App() {
     }, "設定を保存しました");
   };
 
+  const handleStorageBusy = (busy: boolean) => { storageBusyRef.current = busy; setStorageBusy(busy); };
+  const handleStorageChanged = (next: AppData) => {
+    dataRef.current = next;
+    setData(next); setLoadError(""); setSaveError(""); setSettingsOpen(false); setUiScalePreview(null);
+    setToast("予定データの保存先を切り替えました。元のデータは残しています");
+  };
+
   if (loadError) {
     return (
       <main className="fatal-state">
         <p className="eyebrow">koyomado</p>
         <h1>カレンダーを開けませんでした</h1>
         <p>{loadError}</p>
-        <p>アプリのフォルダーへ書き込めるか確認して、もう一度起動してください。</p>
+        <p>保存先の接続・同期状態と読み書き権限を確認するか、下で別の既存データを選択してください。</p>
+        <StorageSettings onChanged={handleStorageChanged} onBusyChange={handleStorageBusy} />
+        <BackupSettings onChanged={handleStorageChanged} onBusyChange={handleStorageBusy} />
       </main>
     );
   }
@@ -893,6 +968,8 @@ function App() {
           key={editing === "new" ? `new-${selectedDate}` : `${editing.id}:${editing.occurrence?.originalDate ?? editing.recurrenceException?.originalDate ?? editing.date}`}
           date={selectedDate}
           event={editing === "new" ? undefined : editing}
+          masterEvent={editing !== "new" ? data.events.find(item => item.id === (editing.occurrence?.masterId ?? editing.recurrenceException?.masterId)) : undefined}
+          saveError={saveError}
           copiedContent={copiedContent}
           googleAccounts={data.settings.google.enabled ? data.settings.google.accounts.filter((account) => account.syncEnabled) : []}
           defaultSyncTargets={data.settings.google.enabled ? data.settings.google.defaultSyncTargets : []}
@@ -905,7 +982,11 @@ function App() {
       {settingsOpen && (
         <SettingsDialog
           settings={data.settings}
+          saveError={saveError}
           onChange={updateSettings}
+          onStorageChanged={handleStorageChanged}
+          onStorageBusyChange={handleStorageBusy}
+          storageBusy={storageBusy}
           onPreviewUiScale={setUiScalePreview}
           onSync={() => runGoogleSync(true, true)}
           syncBusy={syncBusy}
@@ -972,7 +1053,7 @@ function App() {
           }}
         />
       )}
-      {toast && <div className="toast" role="status">{toast}</div>}
+      {toast && !(saveError && (editing || settingsOpen)) && <div className="toast" role="status">{toast}</div>}
     </div>
   );
 }
@@ -1053,6 +1134,8 @@ function DayAgendaDialog({ date, events, onClose, onAdd, onEdit }: DayAgendaDial
 interface EventEditorProps {
   date: string;
   event?: CalendarEvent;
+  masterEvent?: CalendarEvent;
+  saveError: string;
   copiedContent: EventContent | null;
   googleAccounts: GoogleAccount[];
   defaultSyncTargets: string[];
@@ -1062,7 +1145,7 @@ interface EventEditorProps {
   onCopy: (event: CalendarEvent) => void;
 }
 
-function EventEditor({ date, event, copiedContent, googleAccounts, defaultSyncTargets, onClose, onSave, onDelete, onCopy }: EventEditorProps) {
+function EventEditor({ date, event, masterEvent, saveError, copiedContent, googleAccounts, defaultSyncTargets, onClose, onSave, onDelete, onCopy }: EventEditorProps) {
   const [draft, setDraft] = useState(() => createDraft(
     date,
     event,
@@ -1209,6 +1292,7 @@ function EventEditor({ date, event, copiedContent, googleAccounts, defaultSyncTa
         </header>
 
         <div className="form-body">
+          {saveError && <p className="form-error" role="alert">{saveError}</p>}
           {draft.syncConflict && (
             <div className="sync-conflict-notice" role="alert">
               <strong>Google同期で内容が競合しました</strong>
@@ -1259,8 +1343,14 @@ function EventEditor({ date, event, copiedContent, googleAccounts, defaultSyncTa
           {isOccurrence && (
             <fieldset className="recurrence-scope-panel">
               <legend>変更する範囲</legend>
-              <label><input type="radio" name="recurrence-scope" checked={recurrenceScope === "occurrence"} onChange={() => setRecurrenceScope("occurrence")} />この予定のみ</label>
-              <label><input type="radio" name="recurrence-scope" checked={recurrenceScope === "series"} onChange={() => setRecurrenceScope("series")} />繰り返し全体</label>
+              <label><input type="radio" name="recurrence-scope" checked={recurrenceScope === "occurrence"} onChange={() => {
+                setRecurrenceScope("occurrence");
+                setDraft(current => ({ ...current, recurrence: event?.recurrence ?? null, annual: event?.annual ?? false }));
+              }} />この予定のみ</label>
+              <label><input type="radio" name="recurrence-scope" checked={recurrenceScope === "series"} onChange={() => {
+                setRecurrenceScope("series");
+                if (masterEvent) setDraft(current => ({ ...current, recurrence: structuredClone(masterEvent.recurrence), annual: masterEvent.annual }));
+              }} />繰り返し全体</label>
               {recurrenceScope === "series" && <small>日付の変更は下の周期・曜日で調整します。</small>}
             </fieldset>
           )}
@@ -1454,6 +1544,10 @@ function EventEditor({ date, event, copiedContent, googleAccounts, defaultSyncTa
 
 interface SettingsDialogProps {
   settings: AppData["settings"];
+  saveError: string;
+  onStorageChanged: (data: AppData) => void;
+  onStorageBusyChange: (busy: boolean) => void;
+  storageBusy: boolean;
   onChange: (settings: AppData["settings"]) => Promise<void>;
   onPreviewUiScale: (percent: number | null) => void;
   onSync: () => Promise<boolean>;
@@ -1461,10 +1555,9 @@ interface SettingsDialogProps {
   onClose: () => void;
 }
 
-function SettingsDialog({ settings, onChange, onPreviewUiScale, onSync, syncBusy, onClose }: SettingsDialogProps) {
+function SettingsDialog({ settings, saveError, onStorageChanged, onStorageBusyChange, storageBusy, onChange, onPreviewUiScale, onSync, syncBusy, onClose }: SettingsDialogProps) {
   const [autoStart, setAutoStart] = useState<boolean | null>(null);
   const [autoStartBusy, setAutoStartBusy] = useState(true);
-  const [dataDirectory, setDataDirectory] = useState("確認中…");
   const [status, setStatus] = useState("");
   const [soundBusy, setSoundBusy] = useState(false);
   const [soundPreviewing, setSoundPreviewing] = useState(false);
@@ -1476,9 +1569,8 @@ function SettingsDialog({ settings, onChange, onPreviewUiScale, onSync, syncBusy
   const soundFileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    Promise.all([getAutoStartState(), getDataDirectory()]).then(([enabled, directory]) => {
+    getAutoStartState().then((enabled) => {
       setAutoStart(enabled);
-      setDataDirectory(directory);
       setAutoStartBusy(false);
     }).catch((error: unknown) => {
       setAutoStartBusy(false);
@@ -1548,6 +1640,7 @@ function SettingsDialog({ settings, onChange, onPreviewUiScale, onSync, syncBusy
   };
 
   const closeSettings = async () => {
+    if (storageBusy) return;
     await commitUiScale();
     onPreviewUiScale(null);
     onClose();
@@ -1576,7 +1669,8 @@ function SettingsDialog({ settings, onChange, onPreviewUiScale, onSync, syncBusy
     <div className="modal-backdrop" onMouseDown={(mouseEvent) => { if (mouseEvent.target === mouseEvent.currentTarget) void closeSettings(); }}>
       <section className="dialog settings-dialog" aria-modal="true" role="dialog" aria-labelledby="settings-dialog-title">
         <header className="dialog-header"><div><p className="section-kicker">PREFERENCES</p><h2 id="settings-dialog-title">表示・通知・起動の設定</h2></div><button className="close-button" onClick={() => void closeSettings()} aria-label="閉じる">×</button></header>
-        <div className="settings-body">
+        <div className="settings-body" inert={storageBusy}>
+          {saveError && <p className="form-error" role="alert">{saveError}</p>}
           <section className="settings-section">
             <div className="settings-heading"><div><h3>背景テーマ</h3><p>8つの落ち着いた配色から選べます。</p></div></div>
             <div className="theme-grid">
@@ -1661,14 +1755,11 @@ function SettingsDialog({ settings, onChange, onPreviewUiScale, onSync, syncBusy
             syncBusy={syncBusy}
           />
 
-          <section className="settings-section data-location">
-            <h3>データの保存場所</h3>
-            <p>アプリと一緒に移動できる場所へ保存しています。</p>
-            <code>{dataDirectory}</code>
-          </section>
+          <StorageSettings onChanged={onStorageChanged} onBusyChange={onStorageBusyChange} />
+          <BackupSettings onChanged={onStorageChanged} onBusyChange={onStorageBusyChange} />
           {status && <p className="settings-status" role="status">{status}</p>}
         </div>
-        <footer className="dialog-footer"><span /><button className="primary-button" onClick={() => void closeSettings()}>完了</button></footer>
+        <footer className="dialog-footer"><span role="status">{storageBusy ? "保存先を確認・切替中…" : ""}</span><button className="primary-button" disabled={storageBusy} onClick={() => void closeSettings()}>完了</button></footer>
       </section>
     </div>
   );

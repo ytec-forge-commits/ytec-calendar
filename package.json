@@ -1,7 +1,7 @@
 {
   "name": "koyomado",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "license": "Apache-2.0",
   "repository": "https://github.com/ytec-forge-commits/ytec-calendar",
   "type": "module",
@@ -13,7 +13,7 @@
     "test:watch": "vitest",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build --no-bundle",
+    "tauri:build": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-release.ps1",
     "tauri:portable": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-portable.ps1",
     "package:msix": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-msix.ps1",
     "package:self-signed": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-self-signed-direct.ps1",

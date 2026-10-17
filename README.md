@@ -4,18 +4,13 @@
 
 Koyomadoは、Windowsのデスクトップへウィジェットのように置いて使える、シンプルなカレンダーです。一般利用向けのMicrosoft Store版と、USBメモリやGoogle Driveへフォルダーごと持ち運べるポータブル版を用意します。
 
+**1.1.0（2026-10-17）**。保存先指定、ZIPバックアップ／復元、自動バックアップ、共有データ保護を追加しています。Store・Vectorは審査・更新完了後の配信になります。新機能の利用には1.1.0以降が必要です。アプリUIは日本語です。[日本語操作説明書](docs/Koyomado操作説明書.pdf)と[英語操作説明書](docs/Koyomado-Manual.en.pdf)を用意しています。
+
 - 公式ページ: https://ytec.cloudfree.jp/forge/projects/koyomado/
 - Microsoft Store（推奨）: https://apps.microsoft.com/detail/9P6WFRBWG8X5
-- ポータブル版: https://github.com/ytec-forge-commits/ytec-calendar/releases/tag/v1.0.0-republish-20260929
+- ポータブル版: https://github.com/ytec-forge-commits/ytec-calendar/releases/tag/v1.1.0
 - 対応OS: Windows 10 / 11（64bit）
 - ライセンス: Apache License 2.0
-- お問い合わせ: https://ytec.cloudfree.jp/forge/contact/
-
-## 再公開について
-
-2026年9月29日の再公開では、Private正本から旧Git履歴と旧配布物を引き継がず、ソース・依存通知・マニュアルを再点検しました。Windows実行ファイルと日英PDFは新しく生成しています。アプリの機能、v1.0.0、保存形式version 5は変更していません。再公開版はReleaseタグの `republish-20260929` で識別できます。
-
-アプリのUIは既存の日本語表示を維持します。英語はREADMEと操作説明書で対応し、英語説明書は実際の日本語ラベルも案内します。説明書は `docs/Koyomado操作説明書.pdf` と `docs/Koyomado.en.pdf`、画像の確認範囲は [ASSET_PROVENANCE.md](ASSET_PROVENANCE.md) を参照してください。
 
 ## 主な機能
 
@@ -43,7 +38,7 @@ Koyomadoは、Windowsのデスクトップへウィジェットのように置�
 
 ## 初回の使い方
 
-1. 普段使いには[Microsoft Store版](https://apps.microsoft.com/detail/9P6WFRBWG8X5)をインストールします。持ち運んで使う場合は、[ポータブル版](https://github.com/ytec-forge-commits/ytec-calendar/releases/tag/v1.0.0-republish-20260929)のZIPを今後使う場所へ展開します。
+1. 普段使いには[Microsoft Store版](https://apps.microsoft.com/detail/9P6WFRBWG8X5)をインストールします。持ち運んで使う場合は、[ポータブル版](https://github.com/ytec-forge-commits/ytec-calendar/releases/tag/v1.1.0)のZIPを今後使う場所へ展開します。
 2. Store版はスタートメニュー、ポータブル版は`koyomado.exe`から起動します。
 3. 右上の歯車から、表示方法とWindows自動起動を好みに合わせて設定します。
 4. ウィンドウを好きな位置とサイズへ調整します。同じモニター構成では、次回からその位置で開きます。
@@ -91,9 +86,24 @@ Google OAuthクライアントの作成から接続までの実画面付き手�
 | Microsoft Store版 | `%LOCALAPPDATA%\Packages\Y-TEC.Koyomado_y7q84f7nwz24j\LocalState\Koyomado\data` | Microsoft Store | Microsoft Storeによる配布署名 |
 | ポータブル版 | `koyomado.exe`と同じ場所の`data` | ZIPを展開し、既存`data`を引き継ぐ | Y-TEC自己署名＋公開SHA-256 |
 
-二つの版は保存先が別です。切り替える場合は両方を終了し、Store版を一度起動して終了してから、元の`data`フォルダーの中身を新しい保存先へコピーしてください。移行元は削除せず、予定・設定・通知音を確認できるまでバックアップとして残します。同じGoogle予定への重複同期や二重通知を避けるため、Store版とポータブル版を同時起動しないでください。同一PCではWindows資格情報マネージャーのGoogle更新トークンを共有するため、一方で接続解除すると他方でも再認証が必要になります。
+標準では二つの版の保存先は別です。公開済みv1.0.0から手動で切り替える場合は両方を終了し、Store版を一度起動して終了してから、元の`data`フォルダーの中身を新しい保存先へコピーしてください。移行元は削除せず、予定・設定・通知音を確認できるまでバックアップとして残します。修正版では下記の保存先指定を利用できます。並行起動では、同じGoogle予定への重複同期や二重通知に注意してください。同一PCではWindows資格情報マネージャーのGoogle更新トークンを共有するため、一方で接続解除すると他方でも再認証が必要になります。
 
 Store版のデータはMSIXの`LocalState`にあり、Store更新では通常維持されますが、アプリをアンインストールすると削除される可能性があります。アンインストールやPC初期化の前に、Koyomadoを終了して上記の`data`フォルダーを別の場所へコピーしてください。ポータブル版の`data`はZIP更新で上書きしない限り実行ファイル横へ残ります。
+
+### 保存先フォルダーの指定（1.1.0）
+
+Store版・ポータブル版とも、設定の「予定データの保存先」からGoogle Driveなどの同期フォルダーを指定できます。DriveのWebページではなく、Windowsから読み書きできるローカルのフォルダーを選んでください。
+
+1. 新しい保存先は、先に空の専用フォルダーを作ります。既存ポータブル版を参照する場合は、`calendar-data.json`のある`data`フォルダーを選びます。
+2. 「フォルダーを選択」、またはパス入力後の「このフォルダーを確認」で、予定件数と切替内容を確認します。この段階では保存先は変わりません。
+3. 空フォルダーには「現在のデータをコピーして切り替える」を使います。予定・バックアップ・履歴・ユーザー通知音をコピーして照合し、成功した後だけ保存先を切り替えます。元のデータは残ります。
+4. 予定があるフォルダーには「選択先の既存データを使う」を使います。選択先の予定へ切り替わり、現在の予定との自動統合や上書きはしません。
+
+切替後のアプリ再起動は不要です。別ウィンドウが切り替えた場合も、操作していなければ自動で取り込みます。編集中は入力を保持し、旧保存先の入力を新しい保存先へ保存することを止めます。保存先を利用できない場合は、空の予定を作ったり標準へ自動で戻したりしません。エラー画面から別の既存データのフォルダーを選び直せます。
+
+ウィンドウ位置は従来の標準保存先に残し、フォルダー指定もPCごとに保存します。Store版では`LocalState/Koyomado/storage-location.json`、ポータブル版では`%LOCALAPPDATA%/Koyomado/storage-locations/`内に保持します。別PCではそのPCで同じデータフォルダーを指定してください。Googleの更新トークンはWindows資格情報マネージャーに残り、移行・共有しません。標準へ戻す場合は「標準の保存先を指定」で改めて件数を確認して切り替えます。
+
+コピー・照合・最後の設定保存のいずれかが失敗した場合は、元の保存先設定を維持します。途中までコピーしたファイルは勝手に削除しません。元データを保全したまま、別の空フォルダーで再試行してください。切替前後に他PCで編集しないようにし、Drive側の同期完了を確認してください。未同期・オフライン中の競合を完全自動で解決する機能ではありません。
 
 ### dataフォルダーの内容
 
@@ -113,9 +123,35 @@ Store版のデータはMSIXの`LocalState`にあり、Store更新では通常維
 
 設定画面では「やわらぎ」「深い雫」「小鈴」「朝露のピアノ」「木漏れ日のカリンバ」の5種類、音なし、またはユーザー音源を選択できます。ユーザー音源は15MBまでのMP3 / M4A / AAC / WAV / OGG / Opus / FLAC / MIDIに対応します。MIDIは内蔵の穏やかな音色で再生するため、元ファイルの音源や音色とは異なる場合があります。実際に再生できる形式はWindows WebView2のコーデックにも依存します。
 
-Google Drive上で使う場合、同じフォルダーを複数PCから同時に起動しないでください。Google Driveそのもののファイル競合はKoyomadoでは解決できません。
+### 共有フォルダーでの同時起動とデータ保護（1.1.0）
+
+同じポータブル版のフォルダーを複数PCから同時に起動できます。**以下の保護は1.1.0以降の機能です。共有するすべてのPCで1.1.0以降を使ってください。** 旧版との混在は保護の対象外です。
+
+起動中は、操作していないときに約2秒ごとと画面の再表示時に保存データを確認します。予定・設定を編集中は入力を維持し、保存直前に最新データとの変更点を確認します。異なる予定や異なる設定項目への変更は合わせて保存します。同じ予定・繰り返しシリーズ・同じ設定項目への変更が競合した場合は上書きを止め、入力を編集画面に残します。内容を控えるかコピーしてから編集を閉じると、アプリを再起動せず最新データを読み込めます。
+
+Windowsでは同じ保存先への読込み・保存をプロセス間でも排他制御し、本体ファイルを先に削除せず置き換えます。本体がない・壊れている場合もバックアップまたは完了済みの一時ファイルを確認します。復旧できないデータの形跡がある場合は、空での初期化を停止します。
+
+予定データの保存前後は`data/calendar-history/`へ別名のJSONとして残します。この履歴は予定・削除済み予定・設定を含むため、本体と同様に非公開で保管してください。自動削除しないため、利用に伴って容量が増えます。復旧時は全PCのアプリを終了し、`data`全体を別の場所へコピーして保全してから、対象の履歴JSONを確認して`calendar-data.json`へコピーします。複数PCの履歴が混在する場合、日時が新しいだけで正しいとは限りません。元の本体・バックアップ・履歴は削除しないでください。
+
+Google Driveの未同期・オフライン中の変更は、そのPCへ届くまで検知できません。履歴は復旧手段であり、Driveの競合を自動解決する機能ではありません。編集前には同期の完了を確認し、大切な予定は別の場所にもバックアップしてください。
+
+### ZIPバックアップと復元（1.1.0）
+
+設定の「ZIPバックアップ・復元」から、アプリ内でZIPを保存・読込できます。予定、削除済み予定、外観などの設定、ユーザー通知音を含みます。OAuthクライアント設定・Windows資格情報のトークン・PC固有の保存先指定・ウィンドウ位置・自動バックアップ設定・過去の履歴ファイルは含めません。ZIPは暗号化されず、予定やアカウント情報を含むため非公開で保管してください。OAuthクライアントJSONの原本は別途安全に保管してください。
+
+復元は、ZIPと空の専用フォルダーを選び、作成日時・件数を確認してから実行します。既存の予定へ上書き・統合せず、展開・整合性確認後に保存先を切り替えます。元の予定とZIPは残り、再起動は不要です。途中失敗のフォルダーは未完了として利用を止めます。別の空フォルダーで再試行してください。専用バックアップ形式v1に対応し、破損、想定外のパス、チェックサム不一致、非対応版は復元前に拒否します。合計256MB、各ファイル32MB、2048ファイルまでです。
+
+Google連携は復元後にOFFになります。OAuth設定の再読込・再認証後、各アカウントの初回同期はGoogle側の全件受信・照合だけを行い、追加・更新・削除を送りません。Googleの予定IDとKoyomadoの元IDで照合するため、初回アップロード前のバックアップも同じ予定へ紐付け直せます。紐付く予定はGoogle側の最新内容を優先し、照合できない復元予定は同期対象から外してローカルに保持します。古い削除記録をGoogle側へ送信しません。復元時点の内容は元ZIPに残ります。2回目以降は通常の同期へ戻ります。実Google APIでの復元結合試験は別途必要です。
+
+#### 自己署名版とStore版の間で移行する
+
+両方がZIP機能を備えた1.1.0以降なら、自己署名ポータブル版→Store版、Store版→自己署名ポータブル版とも同じ手順です。移行元での編集を止め、設定からバックアップZIPを保存し、移行先でそのZIPを空の専用フォルダーへ復元します。**アプリ配布用ZIPをバックアップとしては読み込めません。** 元データとZIPは残し、予定・複数日・繰り返し・通知音を確認してから常用先を決めます。Google認証と自動バックアップ設定は移行先で再設定します。Store版のアンインストール前はZIPをLocalStateの外へ保存してください。旧1.0.0からはデータを保全して先に更新するか、上記の保存先指定で既存dataを参照します。
+
+自動バックアップはPCごとに有効化し、別の保存先フォルダー、毎日・毎週（月曜区切り）・毎月（1日区切り）、残す世代数1～100（初期10）を指定します。起動中に約60秒ごとに期限を確認し、各期間1回作成します。終了中に期限が来た分は次回起動時に1回作成します。新しいZIPの保存・再読込・照合が成功した後だけ、この設定で作成し内容が変わっていない古いZIPを整理します。手動ZIPや別の設定のZIPは対象外です。保存先変更で残った旧フォルダーのZIP、整理を安全に行えなかったZIP、クラッシュ時の未登録ZIPは残る場合があり、設定のエラー表示も確認してください。予定の履歴JSONにはこの世代制限を適用しません。
 
 ## 開発
+
+ZIP機能の依存`zip 9.0.4`に合わせ、ソースからのビルドにはRust 1.88以降が必要です。
 
 必要な環境はNode.js、npm、Rust stable、Tauri 2が要求するWindows開発環境です。
 
@@ -143,26 +179,13 @@ npm run tauri:build
 
 実際のGoogleアカウントを使う結合テストは、利用者自身のテスト用OAuthクライアントと合成予定だけで行います。OAuthクライアントJSONやトークンはGit、ログ、Issueへ含めないでください。
 
-### 操作説明書の生成
-
-Python、ReportLab、pypdfが必要です。生成前に説明用画像が実データを含まないことを確認してください。
-
-```powershell
-python scripts/generate-operation-manual.py
-python scripts/generate-operation-manual-en.py
-python scripts/test-operation-manual.py
-python scripts/test-portable-package.py
-```
-
-ポータブル同梱テストは新規ビルド後に実行します。生成PDFはページ数・文字切れ・画像・リンクを別途目視確認します。
-
 ### Microsoft Store向けMSIX
 
 Windows SDKのMakeAppxを使用します。Partner Centerで割り当てられたPackage Identityを推測せず、`packaging/msix/AppxManifest.xml.in`の値と提出先を一致させてください。
 
 ```powershell
 npm run tauri:build
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-msix.ps1 -SkipBuild -PackageVersion 1.0.0.0 -CreateUpload
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-msix.ps1 -SkipBuild -PackageVersion 1.1.0.0 -CreateUpload
 npm run test:store-submission
 ```
 
@@ -177,7 +200,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/new-self-signed-code
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-self-signed-direct.ps1 -CertificateThumbprint <表示されたThumbprint>
 ```
 
-`release/koyomado-v<version>-windows-portable.zip`、公開鍵だけを含む`.cer`、日英の操作説明書、`SHA256SUMS.txt`を生成します。署名にはRFC 3161タイムスタンプを付けます。自己署名はSmartScreen警告をなくす保証ではありません。利用者のTrusted Rootへ証明書を自動登録しません。
+`release/koyomado-v<version>-windows-portable.zip`、公開鍵だけを含む`.cer`、操作説明書、`SHA256SUMS.txt`を生成します。署名にはRFC 3161タイムスタンプを付けます。自己署名はSmartScreen警告をなくす保証ではありません。利用者のTrusted Rootへ証明書を自動登録しません。
 
 開発確認用の未署名ZIPだけを作る場合は次を使えます。未署名ZIPを正式公開物として扱いません。
 

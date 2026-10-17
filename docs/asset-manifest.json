@@ -255,6 +255,27 @@
       "path": "src/assets/koyomado-logo.png",
       "size": 57795,
       "sha256": "f82ccfdd1ee5ae7a6bfe3fa769ef343a6efee7d601a5157d80fe3e62c8040987"
+    },
+    {
+      "path": "docs/release/final-strict/store-assets/koyomado-store-auto-backup-110-ja.png",
+      "size": 220007,
+      "sha256": "b2dc9bb5546456dff4465a459fa32cc5eb437fb7515fdbe4a9bbe86dad9dbd5f"
+    },
+    {
+      "path": "docs/release/final-strict/store-assets/koyomado-store-backup-110-ja.png",
+      "size": 243192,
+      "sha256": "9bea1d8d14ad2e11f99ade979e8fcfa13dbac92352854026e9c6199670ca0b18"
+    },
+    {
+      "path": "docs/release/final-strict/store-assets/koyomado-store-calendar-ja.png",
+      "size": 120412,
+      "sha256": "9a50600de0652adedb4bb65771dc533c5a623ee22a41d3369e96743bf38b0742"
+    },
+    {
+      "path": "docs/release/final-strict/store-assets/koyomado-store-storage-110-ja.png",
+      "size": 243192,
+      "sha256": "9bea1d8d14ad2e11f99ade979e8fcfa13dbac92352854026e9c6199670ca0b18"
     }
-  ]
+  ],
+  "updatedOn": "2026-10-17"
 }

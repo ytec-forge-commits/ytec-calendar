@@ -2,7 +2,7 @@ use auto_launch::AutoLaunch;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
     collections::HashSet,
-    fs::{self, File},
+    fs::{self, File, OpenOptions},
     io::Write,
     path::{Path, PathBuf},
     sync::Mutex,
@@ -19,8 +19,12 @@ use windows::{
     ApplicationModel::{StartupTask, StartupTaskState},
 };
 
+mod backup;
 mod credentials;
+#[cfg(test)]
+mod data_safety_tests;
 mod google;
+mod storage;
 
 const CALENDAR_DATA_VERSION: u32 = 5;
 const WINDOW_STATE_VERSION: u32 = 2;
@@ -31,6 +35,37 @@ const COLLAPSED_MIN_WINDOW_WIDTH: u32 = 375;
 const AUTOSTART_ENTRY_NAME: &str = "Koyomado";
 const PACKAGED_AUTOSTART_TASK_ID: &str = "KoyomadoStartup";
 static APP_DATA_LOCK: Mutex<()> = Mutex::new(());
+
+// This lock protects transactions between processes on this PC. A Drive
+// replica on another PC is not a distributed lock; retain history as well.
+struct CalendarFileLock {
+    _file: File,
+}
+
+impl CalendarFileLock {
+    fn acquire(path: &Path) -> Result<Self, String> {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).map_err(|e| format!("保存先を準備できません: {e}"))?;
+        }
+        let mut options = OpenOptions::new();
+        options.read(true).write(true).create(true).truncate(false);
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::OpenOptionsExt;
+            options.share_mode(0);
+        }
+        let started = Instant::now();
+        loop {
+            match options.open(path.with_extension("lock")) {
+                Ok(file) => return Ok(Self { _file: file }),
+                Err(e) if e.raw_os_error() == Some(32) && started.elapsed() < Duration::from_secs(2) => {
+                    std::thread::sleep(Duration::from_millis(25));
+                }
+                Err(e) => return Err(format!("ほかの画面が保存中、または保存先を利用できません。少し待ってお試しください: {e}")),
+            }
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -653,6 +688,10 @@ fn current_runtime_profile() -> Result<RuntimeProfile, String> {
 }
 
 fn portable_data_dir() -> Result<PathBuf, String> {
+    storage::current_directory()
+}
+
+fn default_data_dir() -> Result<PathBuf, String> {
     current_runtime_profile().map(|profile| profile.data_dir)
 }
 
@@ -918,6 +957,63 @@ fn corrupt_path(path: &Path) -> PathBuf {
 }
 
 fn write_json_with_backup<T: Serialize>(path: &Path, value: &T) -> Result<(), String> {
+    write_json_file(path, value, true)
+}
+
+fn retain_calendar_history(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    if path.file_name().and_then(|name| name.to_str()) != Some("calendar-data.json") {
+        return Ok(());
+    }
+    let directory = path.with_file_name("calendar-history");
+    fs::create_dir_all(&directory).map_err(|e| format!("復旧履歴を作成できません: {e}"))?;
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    for suffix in 0..100 {
+        let candidate = directory.join(format!("{stamp}-{}-{suffix}.json", std::process::id()));
+        match OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .open(candidate)
+        {
+            Ok(mut file) => {
+                file.write_all(bytes)
+                    .and_then(|_| file.sync_all())
+                    .map_err(|e| format!("復旧履歴を保存できません: {e}"))?;
+                return Ok(());
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(format!("復旧履歴を保存できません: {e}")),
+        }
+    }
+    Err("復旧履歴のファイル名を確保できません".into())
+}
+
+fn history_content(bytes: &[u8]) -> Option<serde_json::Value> {
+    let mut value: serde_json::Value = serde_json::from_slice(bytes).ok()?;
+    if let Some(accounts) = value
+        .get_mut("settings")
+        .and_then(|settings| settings.get_mut("google"))
+        .and_then(|google| google.get_mut("accounts"))
+        .and_then(serde_json::Value::as_array_mut)
+    {
+        for account in accounts {
+            if let Some(account) = account.as_object_mut() {
+                for key in ["syncToken", "lastSyncAt", "lastError", "needsReauth"] {
+                    account.remove(key);
+                }
+            }
+        }
+    }
+    Some(value)
+}
+
+fn write_json_file<T: Serialize>(
+    path: &Path,
+    value: &T,
+    backup_primary: bool,
+) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
             .map_err(|error| format!("データフォルダーを作成できません: {error}"))?;
@@ -925,7 +1021,30 @@ fn write_json_with_backup<T: Serialize>(path: &Path, value: &T) -> Result<(), St
 
     let serialized = serde_json::to_vec_pretty(value)
         .map_err(|error| format!("保存データをJSONへ変換できません: {error}"))?;
+    let mut keep_history = true;
+    if path.exists() {
+        let previous =
+            fs::read(path).map_err(|e| format!("更新前のデータを保護できません: {e}"))?;
+        if previous == serialized {
+            return Ok(());
+        }
+        keep_history = match (history_content(&previous), history_content(&serialized)) {
+            (Some(before), Some(after)) => before != after,
+            _ => true,
+        };
+        if keep_history {
+            retain_calendar_history(path, &previous)?;
+        }
+    }
+    if keep_history {
+        retain_calendar_history(path, &serialized)?;
+    }
     let temp_path = path.with_extension("json.tmp");
+    if temp_path.exists() {
+        let pending = fs::read(&temp_path)
+            .map_err(|e| format!("前回の一時保存データを保護できません: {e}"))?;
+        retain_calendar_history(path, &pending)?;
+    }
     let mut temp_file = File::create(&temp_path)
         .map_err(|error| format!("一時保存ファイルを作成できません: {error}"))?;
     temp_file
@@ -934,19 +1053,16 @@ fn write_json_with_backup<T: Serialize>(path: &Path, value: &T) -> Result<(), St
     temp_file
         .sync_all()
         .map_err(|error| format!("一時保存ファイルを確定できません: {error}"))?;
+    drop(temp_file);
 
     let backup = backup_path(path);
-    if path.exists() {
+    if backup_primary && path.exists() {
         fs::copy(path, &backup)
             .map_err(|error| format!("更新前バックアップを作成できません: {error}"))?;
-        fs::remove_file(path)
-            .map_err(|error| format!("更新前ファイルを置き換えられません: {error}"))?;
     }
 
     if let Err(error) = fs::rename(&temp_path, path) {
-        if backup.exists() {
-            let _ = fs::copy(&backup, path);
-        }
+        // Never replace a still-valid primary with an older backup on failure.
         return Err(format!("保存ファイルを確定できません: {error}"));
     }
     Ok(())
@@ -955,9 +1071,6 @@ fn write_json_with_backup<T: Serialize>(path: &Path, value: &T) -> Result<(), St
 fn read_json_with_recovery<T: DeserializeOwned + Serialize>(
     path: &Path,
 ) -> Result<Option<T>, String> {
-    if !path.exists() {
-        return Ok(None);
-    }
     let parse = |target: &Path| -> Result<T, String> {
         let content =
             fs::read(target).map_err(|error| format!("保存ファイルを読み込めません: {error}"))?;
@@ -965,16 +1078,34 @@ fn read_json_with_recovery<T: DeserializeOwned + Serialize>(
             .map_err(|error| format!("保存ファイルの形式が正しくありません: {error}"))
     };
 
+    let backup = backup_path(path);
+    let temp = path.with_extension("json.tmp");
+    if !path.exists() && !backup.exists() && !temp.exists() {
+        if path.file_name().and_then(|name| name.to_str()) == Some("calendar-data.json") {
+            let history = path.with_file_name("calendar-history");
+            if history.exists()
+                && fs::read_dir(history)
+                    .map_err(|e| format!("復旧履歴を確認できません: {e}"))?
+                    .next()
+                    .is_some()
+            {
+                return Err("予定データ本体が見つかりません。calendar-historyに復旧履歴があるため、空のカレンダーでの初期化を停止しました".into());
+            }
+        }
+        return Ok(None);
+    }
     match parse(path) {
         Ok(value) => Ok(Some(value)),
         Err(primary_error) => {
-            let backup = backup_path(path);
-            let recovered = parse(&backup).map_err(|_| primary_error)?;
-            fs::copy(path, corrupt_path(path))
-                .map_err(|error| format!("壊れた保存ファイルを退避できません: {error}"))?;
-            fs::remove_file(path)
-                .map_err(|error| format!("壊れた保存ファイルを置き換えられません: {error}"))?;
-            write_json_with_backup(path, &recovered)?;
+            let recovered = parse(&backup)
+                .or_else(|_| parse(&temp))
+                .map_err(|_| primary_error)?;
+            if path.exists() {
+                fs::copy(path, corrupt_path(path))
+                    .map_err(|error| format!("壊れた保存ファイルを退避できません: {error}"))?;
+            }
+            // Keep the valid backup; do not copy the corrupt primary over it.
+            write_json_file(path, &recovered, false)?;
             Ok(Some(recovered))
         }
     }
@@ -1024,22 +1155,57 @@ fn load_app_data_from_path(path: &Path) -> Result<AppData, String> {
 }
 
 fn load_app_data_inner() -> Result<AppData, String> {
-    load_app_data_from_path(&portable_data_dir()?.join("calendar-data.json"))
+    storage::with_current(|directory| {
+        load_app_data_from_path(&directory.join("calendar-data.json"))
+    })
 }
 
 #[tauri::command]
-fn load_app_data() -> Result<AppData, String> {
+fn load_app_data() -> Result<storage::CalendarSnapshot, String> {
     let _guard = APP_DATA_LOCK
         .lock()
         .map_err(|_| "予定データの読み込みを開始できません".to_string())?;
-    load_app_data_inner()
+    storage::with_current(storage::snapshot)
 }
 
 #[tauri::command]
-fn save_app_data(data: AppData) -> Result<(), String> {
+fn save_app_data(
+    data: AppData,
+    expected: AppData,
+    expected_directory: String,
+) -> Result<storage::CalendarSnapshot, String> {
     let _guard = APP_DATA_LOCK
         .lock()
         .map_err(|_| "予定データの保存を開始できません".to_string())?;
+    storage::with_current(|directory| {
+        if directory != Path::new(&expected_directory) {
+            return Err("保存先が別の画面で変更されました。入力を控えて編集を閉じ、最新の保存先を確認してください".into());
+        }
+        let data = save_app_data_checked(&directory.join("calendar-data.json"), data, &expected)?;
+        Ok(storage::CalendarSnapshot {
+            data,
+            directory: directory.display().to_string(),
+        })
+    })
+}
+
+fn save_app_data_checked(
+    path: &Path,
+    data: AppData,
+    expected: &AppData,
+) -> Result<AppData, String> {
+    let latest = load_app_data_from_path(path)?;
+    if serde_json::to_value(&latest).map_err(|e| e.to_string())?
+        != serde_json::to_value(expected).map_err(|e| e.to_string())?
+    {
+        // Preserve a recoverable local candidate even if a replica changed
+        // after the frontend's latest read. Do not modify the primary.
+        retain_calendar_history(
+            path,
+            &serde_json::to_vec_pretty(&data).map_err(|e| e.to_string())?,
+        )?;
+        return Err("DATA_CHANGED:保存直前に予定データが更新されました".into());
+    }
     if data.version != CALENDAR_DATA_VERSION {
         return Err(format!("未対応の保存形式です（version: {}）", data.version));
     }
@@ -1080,11 +1246,12 @@ fn save_app_data(data: AppData) -> Result<(), String> {
         return Err("通知音の設定が正しくありません".into());
     }
     if !(80..=130).contains(&data.settings.ui_scale_percent)
-        || data.settings.ui_scale_percent % 5 != 0
+        || !data.settings.ui_scale_percent.is_multiple_of(5)
     {
         return Err("表示倍率は80～130%の5%刻みで設定してください".into());
     }
-    write_json_with_backup(&portable_data_dir()?.join("calendar-data.json"), &data)
+    write_json_with_backup(path, &data)?;
+    Ok(data)
 }
 
 const MAX_CUSTOM_NOTIFICATION_SOUND_BYTES: usize = 15 * 1024 * 1024;
@@ -1130,20 +1297,27 @@ fn save_custom_notification_sound(
     file_name: String,
     bytes: Vec<u8>,
 ) -> Result<CustomNotificationSound, String> {
+    storage::with_current(|directory| save_sound_in_directory(directory, &file_name, &bytes))
+}
+
+fn save_sound_in_directory(
+    root: &Path,
+    file_name: &str,
+    bytes: &[u8],
+) -> Result<CustomNotificationSound, String> {
     if bytes.is_empty() || bytes.len() > MAX_CUSTOM_NOTIFICATION_SOUND_BYTES {
         return Err("通知音は15 MB以内のファイルを選択してください".into());
     }
-    let (extension, mime_type, kind) = supported_notification_sound(&file_name, &bytes)
+    let (extension, mime_type, kind) = supported_notification_sound(file_name, bytes)
         .ok_or_else(|| "対応している音声ファイル（MP3 / M4A / AAC / WAV / OGG / Opus / FLAC / MIDI）を選択してください".to_string())?;
-    let directory = portable_data_dir()?.join("notification-sounds");
+    let directory = root.join("notification-sounds");
     fs::create_dir_all(&directory)
         .map_err(|error| format!("通知音フォルダーを作成できません: {error}"))?;
     let stored_file_name = format!("custom.{extension}");
     let destination = directory.join(&stored_file_name);
     let temporary = directory.join(format!("{stored_file_name}.tmp"));
     let previous = directory.join(format!("{stored_file_name}.previous"));
-    fs::write(&temporary, &bytes)
-        .map_err(|error| format!("通知音を一時保存できません: {error}"))?;
+    fs::write(&temporary, bytes).map_err(|error| format!("通知音を一時保存できません: {error}"))?;
     if previous.exists() {
         fs::remove_file(&previous)
             .map_err(|error| format!("以前の通知音バックアップを整理できません: {error}"))?;
@@ -1197,13 +1371,13 @@ fn load_custom_notification_sound(stored_file_name: String) -> Result<Vec<u8>, S
     if file_name != stored_file_name || !file_name.starts_with("custom.") {
         return Err("通知音のファイル名が正しくありません".into());
     }
-    let path = portable_data_dir()?
-        .join("notification-sounds")
-        .join(file_name);
-    let bytes = fs::read(&path).map_err(|error| format!("通知音を読み込めません: {error}"))?;
-    supported_notification_sound(file_name, &bytes)
-        .ok_or_else(|| "保存されている通知音の形式を確認できません".to_string())?;
-    Ok(bytes)
+    storage::with_current(|directory| {
+        let path = directory.join("notification-sounds").join(file_name);
+        let bytes = fs::read(&path).map_err(|error| format!("通知音を読み込めません: {error}"))?;
+        supported_notification_sound(file_name, &bytes)
+            .ok_or_else(|| "保存されている通知音の形式を確認できません".to_string())?;
+        Ok(bytes)
+    })
 }
 
 #[tauri::command]
@@ -1425,7 +1599,7 @@ fn fit_window_placement(
 }
 
 fn load_window_state_file(layout_id: &str) -> WindowStateFile {
-    let Ok(path) = portable_data_dir().map(|directory| directory.join("window-state.json")) else {
+    let Ok(path) = default_data_dir().map(|directory| directory.join("window-state.json")) else {
         return WindowStateFile::default();
     };
     let loaded: Option<WindowStateOnDisk> = read_json_with_recovery(&path).ok().flatten();
@@ -1480,7 +1654,7 @@ fn load_window_placement(layout_id: &str) -> Option<WindowPlacement> {
 }
 
 fn save_window_state(layout_id: &str, placement: &WindowPlacement) {
-    if let Ok(path) = portable_data_dir().map(|directory| directory.join("window-state.json")) {
+    if let Ok(path) = default_data_dir().map(|directory| directory.join("window-state.json")) {
         let state_file =
             upsert_window_profile(load_window_state_file(layout_id), layout_id, placement);
         let _ = write_json_with_backup(&path, &state_file);
@@ -1740,6 +1914,17 @@ pub fn run() {
             load_app_data,
             save_app_data,
             get_data_directory,
+            storage::get_storage_info,
+            storage::choose_storage_directory,
+            storage::preview_storage_directory,
+            storage::apply_storage_directory,
+            backup::export_backup,
+            backup::preview_backup_restore,
+            backup::apply_backup_restore,
+            backup::get_auto_backup,
+            backup::configure_auto_backup,
+            backup::run_due_backup,
+            storage::choose_backup_file,
             get_auto_start_state,
             repair_auto_start,
             set_auto_start_state,

@@ -25,3 +25,11 @@ This record does not change existing licenses or grant general trademark rights.
 - Five included notification sounds: CC0 1.0; see `third_party/opengameart-cc0-notification-sounds/NOTICE.txt` for source pages, retrieval date and known edits.
 - The exact source filenames and per-file edits for the three Robin Lamb sounds were not recorded in the canonical notice. They remain unknown; no new edit history is invented.
 - No images, fonts or sounds were replaced in this republication candidate.
+
+
+## Version 1.1.0 Screenshots (2026-10-17)
+
+- The 2026-09-29 notes above describe the earlier republication. New 1.1.0 calendar, storage, ZIP and automatic-backup screenshots were captured from the production Windows executable with a separate synthetic-data fixture.
+- Events are examples. The current-storage path was replaced in the screenshot fixture's display with a clearly labeled example, `G:\マイドライブ\Koyomado\data`; it is not this computer's actual path. No backup or storage operation used that display-only example.
+- Public images were checked for machine-specific paths, user names, real events and credentials. They contain none. New images use the same existing app UI, font and logo; no new third-party decorative assets were introduced.
+- File identities are included in `docs/asset-manifest.json`. The Japanese UI is retained in English listings with English captions.

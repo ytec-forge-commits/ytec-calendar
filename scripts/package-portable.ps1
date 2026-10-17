@@ -36,13 +36,17 @@ try {
     Copy-Item -LiteralPath (Join-Path $projectRoot "LICENSE.txt") -Destination (Join-Path $stagingPath "LICENSE.txt")
     Copy-Item -LiteralPath (Join-Path $projectRoot "NOTICE") -Destination (Join-Path $stagingPath "NOTICE")
     Copy-Item -LiteralPath (Join-Path $projectRoot "CHANGELOG.md") -Destination (Join-Path $stagingPath "CHANGELOG.md")
+    foreach ($englishDocument in @("README.en.md", "CHANGELOG.en.md", "PRIVACY.en.md")) {
+        Copy-Item -LiteralPath (Join-Path $projectRoot $englishDocument) -Destination (Join-Path $stagingPath $englishDocument)
+    }
     Copy-Item -LiteralPath (Join-Path $projectRoot "THIRD_PARTY_NOTICES.md") -Destination (Join-Path $stagingPath "THIRD_PARTY_NOTICES.md")
     Copy-Item -LiteralPath (Join-Path $projectRoot "third_party\opengameart-cc0-notification-sounds\NOTICE.txt") -Destination (Join-Path $stagingPath "NOTIFICATION_SOUNDS_CC0.txt")
     Copy-Item -LiteralPath (Join-Path $projectRoot "PRIVACY.md") -Destination (Join-Path $stagingPath "PRIVACY.md")
     Copy-Item -LiteralPath (Join-Path $projectRoot "CODE_SIGNING_POLICY.md") -Destination (Join-Path $stagingPath "CODE_SIGNING_POLICY.md")
     Copy-Item -LiteralPath (Join-Path $projectRoot "src\assets\fonts\OFL.txt") -Destination (Join-Path $stagingPath "LINE_Seed_JP_OFL.txt")
     Copy-Item -LiteralPath (Join-Path $projectRoot "docs\Koyomado操作説明書.pdf") -Destination (Join-Path $stagingPath "Koyomado操作説明書.pdf")
-    Copy-Item -LiteralPath (Join-Path $projectRoot "docs\Koyomado.en.pdf") -Destination (Join-Path $stagingPath "Koyomado.en.pdf")
+    Copy-Item -LiteralPath (Join-Path $projectRoot "docs\Koyomado-Manual.en.pdf") -Destination (Join-Path $stagingPath "Koyomado-Manual.en.pdf")
+
     Copy-Item -LiteralPath (Join-Path $projectRoot "ASSET_PROVENANCE.md") -Destination (Join-Path $stagingPath "ASSET_PROVENANCE.md")
     New-Item -ItemType Directory -Path (Join-Path $stagingPath "docs") | Out-Null
     Copy-Item -LiteralPath (Join-Path $projectRoot "docs\asset-manifest.json") -Destination (Join-Path $stagingPath "docs\asset-manifest.json")
@@ -50,6 +54,9 @@ try {
     foreach ($noticeDirectory in @("dependency-licenses", "mpl-source")) {
         Copy-Item -LiteralPath (Join-Path $projectRoot "third_party\$noticeDirectory") -Destination (Join-Path $stagingPath "third_party") -Recurse
     }
+
+    Copy-Item -LiteralPath (Join-Path $projectRoot "docs\Koyomado.en.pdf") -Destination (Join-Path $stagingPath "Koyomado.en.pdf")
+    Copy-Item -LiteralPath (Join-Path $projectRoot "third_party\rust-backup") -Destination (Join-Path $stagingPath "third_party") -Recurse
 
     @(
         "このフォルダーに予定と設定が保存されます。"
@@ -70,13 +77,14 @@ try {
         ""
         "1. koyomado.exe を起動してください。"
         "2. 配置場所を決めた後、右上の歯車からWindows自動起動をONにできます。"
-        "3. 予定と設定は同じ場所の data フォルダーへ保存されます。"
+        "3. 標準では同じ場所の data フォルダーへ保存します。歯車から別の保存先も指定できます。"
         "4. 更新時は data フォルダーを残し、実行ファイルと同梱文書を差し替えてください。"
-        "5. Google Drive上では複数PCから同時に起動しないでください。"
+        "5. 共有フォルダーで同時起動できます。全PCを1.1.0以降へ揃え、編集前後はDriveの同期完了を確認し、同じ予定の同時編集を避けてください。"
         $signatureNote
         ""
         "操作説明書: Koyomado操作説明書.pdf"
-        "英語説明書: Koyomado.en.pdf（アプリのUIは日本語です）"
+        "English manual: Koyomado-Manual.en.pdf / README.en.md"
+        "Store版との移行: 設定からZIPを保存し、移行先で空フォルダーへ復元。元データは削除しません。Google連携は復元後に再設定が必要です。"
         "公式ページ: https://ytec.cloudfree.jp/forge/projects/koyomado/"
         "お問い合わせ: https://ytec.cloudfree.jp/forge/contact/"
         "利用条件: LICENSE.txt / NOTICE"
@@ -91,16 +99,16 @@ try {
         ""
         "The application interface is Japanese. English instructions: Koyomado.en.pdf"
         "Extract the entire ZIP into a writable folder, then run koyomado.exe."
-        "Events and settings are stored in the adjacent data folder."
+        "By default events and settings are stored in the adjacent data folder. In Settings you can select a data folder, export/import a calendar backup ZIP, and enable automatic backups with retention of 1-100 generations. Google must be reconnected after ZIP restore."
         "Before updating, quit Koyomado and back up data. Retain your existing data folder; do not replace it with this empty distribution folder."
-        "Do not run the same Google Drive folder on multiple PCs simultaneously."
+        "Multiple PCs may run the same shared data with 1.1.0 or later. Wait for Drive synchronization before and after editing, avoid simultaneous edits to the same event, and keep independent backups. Unseen remote changes cannot be locked."
         "Google integration is optional and initially OFF. Never send OAuth JSON, tokens or actual events to support."
         "Formal portable distributions use Y-TEC self-signing and SHA-256. Self-signing does not remove all Windows warnings. An unsigned local test ZIP is not an official release."
         ""
         "Product page: https://ytec.cloudfree.jp/forge/en/projects/koyomado/"
         "Contact: https://ytec.cloudfree.jp/forge/contact/"
         "License and notices: LICENSE.txt / NOTICE / THIRD_PARTY_NOTICES.md / third_party"
-        "Privacy: PRIVACY.md"
+        "Privacy: PRIVACY.en.md"
     ) | Set-Content -LiteralPath (Join-Path $stagingPath "README.en.txt") -Encoding UTF8
 
     if (Test-Path -LiteralPath $archivePath) {

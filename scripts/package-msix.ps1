@@ -68,12 +68,27 @@ try {
         "THIRD_PARTY_NOTICES.md",
         "PRIVACY.md",
         "CODE_SIGNING_POLICY.md"
+        "README.en.md"
+        "CHANGELOG.en.md"
+        "PRIVACY.en.md"
     )
     foreach ($legalFile in $legalFiles) {
         Copy-Item -LiteralPath (Join-Path $projectRoot $legalFile) -Destination (Join-Path $stagingPath "legal\$legalFile")
     }
     Copy-Item -LiteralPath (Join-Path $projectRoot "src\assets\fonts\OFL.txt") -Destination (Join-Path $stagingPath "legal\LINE_Seed_JP_OFL.txt")
     Copy-Item -LiteralPath (Join-Path $projectRoot "third_party\opengameart-cc0-notification-sounds\NOTICE.txt") -Destination (Join-Path $stagingPath "legal\NOTIFICATION_SOUNDS_CC0.txt")
+    New-Item -ItemType Directory -Path (Join-Path $stagingPath "docs") | Out-Null
+    foreach ($manual in @("Koyomado操作説明書.pdf", "Koyomado-Manual.en.pdf")) {
+        Copy-Item -LiteralPath (Join-Path $projectRoot "docs\$manual") -Destination (Join-Path $stagingPath "docs\$manual")
+    }
+
+    Copy-Item -LiteralPath (Join-Path $projectRoot "ASSET_PROVENANCE.md") -Destination (Join-Path $stagingPath "legal/ASSET_PROVENANCE.md")
+    Copy-Item -LiteralPath (Join-Path $projectRoot "docs/asset-manifest.json") -Destination (Join-Path $stagingPath "docs/asset-manifest.json")
+    Copy-Item -LiteralPath (Join-Path $projectRoot "docs/Koyomado.en.pdf") -Destination (Join-Path $stagingPath "docs/Koyomado.en.pdf")
+    New-Item -ItemType Directory -Path (Join-Path $stagingPath "legal/third_party") | Out-Null
+    foreach ($noticeDirectory in @("dependency-licenses", "mpl-source", "rust-backup")) {
+        Copy-Item -LiteralPath (Join-Path $projectRoot "third_party/$noticeDirectory") -Destination (Join-Path $stagingPath "legal/third_party") -Recurse
+    }
 
     $manifest = [System.IO.File]::ReadAllText(
         $manifestTemplate,
