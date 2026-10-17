@@ -2,6 +2,8 @@
 
 In Settings, choose 「操作説明書を開く」 to open the bundled PDF in Windows' default viewer. No network connection or Google sign-in is required.
 
+**Version 1.1.3 (2026-10-17)** adds this in-app manual button and centers the contact link on the Japanese manual cover.
+
 [日本語](README.md) | English
 
 Koyomado is a simple Windows calendar that can sit on your desktop like a widget. It is distributed as a Microsoft Store app for general use and as a portable folder that can be carried on USB storage or Google Drive.
