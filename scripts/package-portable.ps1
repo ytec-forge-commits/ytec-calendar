@@ -114,7 +114,23 @@ try {
     if (Test-Path -LiteralPath $archivePath) {
         Remove-Item -LiteralPath $archivePath -Force
     }
-    Compress-Archive -Path (Join-Path $stagingPath "*") -DestinationPath $archivePath -CompressionLevel Optimal
+    # Use explicit ZIP entry names: Windows PowerShell 5 Compress-Archive
+    # writes backslashes for nested paths, unlike PowerShell 7.
+    Add-Type -AssemblyName System.IO.Compression
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $base = [IO.Path]::GetFullPath($stagingPath).TrimEnd('\') + '\'
+    $stream = [IO.File]::Open($archivePath, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+    try {
+        $archive = [IO.Compression.ZipArchive]::new($stream, [IO.Compression.ZipArchiveMode]::Create, $true)
+        try {
+            foreach ($item in Get-ChildItem -LiteralPath $stagingPath -Recurse -File -Force | Sort-Object FullName) {
+                $entryName = $item.FullName.Substring($base.Length).Replace('\', '/')
+                [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive, $item.FullName, $entryName, [IO.Compression.CompressionLevel]::Optimal) | Out-Null
+            }
+        }
+        finally { $archive.Dispose() }
+    }
+    finally { $stream.Dispose() }
     Write-Output "ポータブルZIPを作成しました: $archivePath"
 }
 finally {
