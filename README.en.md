@@ -1,5 +1,9 @@
 # Koyomado
 
+In Settings, choose 「操作説明書を開く」 to open the bundled PDF in Windows' default viewer. No network connection or Google sign-in is required.
+
+**Version 1.1.3 (2026-10-17)** adds this in-app manual button and centers the contact link on the Japanese manual cover.
+
 [日本語](README.md) | English
 
 Koyomado is a simple Windows calendar that can sit on your desktop like a widget. It is distributed as a Microsoft Store app for general use and as a portable folder that can be carried on USB storage or Google Drive.
@@ -8,7 +12,7 @@ Koyomado is a simple Windows calendar that can sit on your desktop like a widget
 
 - Official website: https://ytec.cloudfree.jp/forge/en/projects/koyomado/
 - Microsoft Store (recommended): https://apps.microsoft.com/detail/9P6WFRBWG8X5
-- Portable edition: https://github.com/ytec-forge-commits/ytec-calendar/releases/tag/v1.1.2
+- Portable edition: https://github.com/ytec-forge-commits/ytec-calendar/releases/tag/v1.1.3
 - Supported operating systems: Windows 10 / 11 (64-bit)
 - License: Apache License 2.0
 
@@ -38,7 +42,7 @@ Koyomado does not include printing, PDF export, advertising, analytics, or a pro
 
 ## Getting started
 
-1. For everyday use, install the [Microsoft Store edition](https://apps.microsoft.com/detail/9P6WFRBWG8X5). When portability is needed, extract the [portable edition](https://github.com/ytec-forge-commits/ytec-calendar/releases/tag/v1.1.2) ZIP where you intend to keep it.
+1. For everyday use, install the [Microsoft Store edition](https://apps.microsoft.com/detail/9P6WFRBWG8X5). When portability is needed, extract the [portable edition](https://github.com/ytec-forge-commits/ytec-calendar/releases/tag/v1.1.3) ZIP where you intend to keep it.
 2. Launch the Store edition from the Start menu, or run `koyomado.exe` for the portable edition.
 3. Open the gear menu in the upper-right corner and configure the display mode and Windows startup behavior.
 4. Move and resize the window as desired. Koyomado will restore that placement the next time it starts with the same monitor configuration.
@@ -187,7 +191,7 @@ MSIX packaging uses MakeAppx from the Windows SDK. Use the exact Package Identit
 
 ```powershell
 npm run tauri:build
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-msix.ps1 -SkipBuild -PackageVersion 1.1.2.0 -CreateUpload
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-msix.ps1 -SkipBuild -PackageVersion 1.1.3.0 -CreateUpload
 npm run test:store-submission
 ```
 

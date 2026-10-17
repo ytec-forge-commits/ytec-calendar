@@ -11,6 +11,12 @@ import { DATA_VERSION, DEFAULT_DATA, DEFAULT_SIMPLE_RECURRENCE } from "../types"
 import { mergeAppData } from "./dataSafety";
 
 const WEB_STORAGE_KEY = "koyomado-preview-data-v1";
+export async function openUserManual(): Promise<void> {
+  if (!isTauriRuntime()) throw new Error("操作説明書はWindowsアプリから開いてください。");
+  const { invoke } = await import("@tauri-apps/api/core");
+  await invoke("open_user_manual");
+}
+
 const LEGACY_WEB_STORAGE_KEY = "ytec-calendar-preview-data-v1";
 const dataLocations = new WeakMap<AppData, string>();
 interface CalendarSnapshot { data: AppData; directory: string }

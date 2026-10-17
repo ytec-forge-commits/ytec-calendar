@@ -25,6 +25,7 @@ mod credentials;
 mod data_safety_tests;
 mod event_ids;
 mod google;
+mod manual;
 mod storage;
 
 const CALENDAR_DATA_VERSION: u32 = 5;
@@ -1954,6 +1955,7 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            manual::open_user_manual,
             load_app_data,
             save_app_data,
             get_data_directory,

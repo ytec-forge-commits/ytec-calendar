@@ -567,7 +567,8 @@ def build_story(styles: dict[str, ParagraphStyle]) -> list:
         Spacer(1, 5 * mm),
         p(f'<link href="{OFFICIAL_URL}" color="#5f5278">公式ページ: {OFFICIAL_URL}</link>', styles["link"]),
         p(f'<link href="{SOURCE_URL}" color="#5f5278">ソースコード: {SOURCE_URL}</link>', styles["link"]),
-        url_link("お問い合わせ", "https://ytec.cloudfree.jp/forge/contact/", styles),
+        p(f'<link href="{CONTACT_URL}" color="#5f5278"><b>お問い合わせ</b>: {CONTACT_URL}</link>',
+          ParagraphStyle("CoverContact", parent=styles["body_small"], alignment=TA_CENTER)),
         PageBreak(),
     ])
 
@@ -577,7 +578,7 @@ def build_story(styles: dict[str, ParagraphStyle]) -> list:
         step(1, "配布方法を選ぶ", "Microsoft Storeでは「インストール」を選びます。直接配布版はZIPを右クリックして「すべて展開」し、ZIPの中から直接起動しないでください。", styles),
         step(2, "Koyomadoを起動", "Store版はスタートメニューから起動します。ポータブル版は、展開したkoyomado.exeを起動します。", styles),
         step(3, "ポータブル版だけ置き場所を決める", "USBメモリやGoogle Driveへ持ち運ぶ場合は、自動起動をONにする前にKoyomadoフォルダーを今後使う場所へ移します。", styles),
-        step(4, "位置と起動方法を整える", "画面を好きな位置とサイズに調整します。右上の歯車から、必要な場合だけ「Windows起動時に自動起動」をONにします。", styles),
+        step(4, "位置と起動方法を整える", "画面を好きな位置とサイズに調整します。右上の歯車から、必要な場合だけ「Windows起動時に自動起動」をONにします。「操作説明書を開く」でこのPDFを再表示できます。", styles),
         Spacer(1, 4 * mm),
         card("標準はタスクバーだけに表示", "初期設定では通常のWindowsアプリと同じく、最小化するとタスクバーへ残り、右上の×で終了します。歯車から「タスクトレイのみ」または「両方」へ変更できます。", styles, GREEN_PALE),
         Spacer(1, 4 * mm),
