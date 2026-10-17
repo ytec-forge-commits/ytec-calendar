@@ -43,6 +43,13 @@ jobs:
         working-directory: src-tauri
         run: cargo fmt --all --check
 
+      - name: Verify dependency license bytes
+        run: python scripts/verify-dependency-notices.py
+
+      - name: Verify portable package contents
+        shell: powershell
+        run: ./scripts/test-package-content.ps1
+
       - name: Test Rust
         working-directory: src-tauri
         run: cargo test --locked

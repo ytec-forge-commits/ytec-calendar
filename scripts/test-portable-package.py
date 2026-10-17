@@ -16,11 +16,11 @@ class PortablePackage(unittest.TestCase):
             fixture = Path(temporary)
             (fixture / "scripts").mkdir()
             shutil.copy2(ROOT / "scripts/package-portable.ps1", fixture / "scripts/package-portable.ps1")
-            for name in ["package.json", "LICENSE.txt", "NOTICE", "CHANGELOG.md", "THIRD_PARTY_NOTICES.md", "PRIVACY.md", "CODE_SIGNING_POLICY.md", "ASSET_PROVENANCE.md"]:
+            for name in ["package.json", "LICENSE.txt", "NOTICE", "CHANGELOG.md", "CHANGELOG.en.md", "README.en.md", "PRIVACY.en.md", "THIRD_PARTY_NOTICES.md", "PRIVACY.md", "CODE_SIGNING_POLICY.md", "ASSET_PROVENANCE.md"]:
                 shutil.copy2(ROOT / name, fixture / name)
             for directory in ["docs", "third_party", "src/assets/fonts"]:
                 shutil.copytree(ROOT / directory, fixture / directory)
-            executable = ROOT / "src-tauri/target/release/koyomado.exe"
+            executable = Path(os.environ.get("CARGO_TARGET_DIR", ROOT / "src-tauri/target")) / "release/koyomado.exe"
             environment = os.environ.copy()
             for key in list(environment):
                 if key.lower() == "psmodulepath":
@@ -28,7 +28,7 @@ class PortablePackage(unittest.TestCase):
             result = subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(fixture / "scripts/package-portable.ps1"), "-SkipBuild", "-ExecutablePath", str(executable)], capture_output=True, env=environment)
             error = result.stderr.decode("utf-8", errors="replace").replace(str(ROOT), "<candidate>").replace(str(fixture), "<fixture>")
             self.assertEqual(result.returncode, 0, "Packaging must finish in the isolated fixture: " + error)
-            with zipfile.ZipFile(fixture / "release/koyomado-v1.0.0-windows-portable.zip") as archive:
+            with zipfile.ZipFile(fixture / "release/koyomado-v1.1.0-windows-portable.zip") as archive:
                 self.assertIsNone(archive.testzip())
                 names = set(archive.namelist())
                 self.assertIn("Koyomado.en.pdf", names)

@@ -8,9 +8,61 @@ import type {
   WindowDisplayMode,
 } from "../types";
 import { DATA_VERSION, DEFAULT_DATA, DEFAULT_SIMPLE_RECURRENCE } from "../types";
+import { mergeAppData } from "./dataSafety";
 
 const WEB_STORAGE_KEY = "koyomado-preview-data-v1";
 const LEGACY_WEB_STORAGE_KEY = "ytec-calendar-preview-data-v1";
+const dataLocations = new WeakMap<AppData, string>();
+interface CalendarSnapshot { data: AppData; directory: string }
+
+function readSnapshot(snapshot: CalendarSnapshot): AppData {
+  const data = normalizeData(snapshot.data);
+  dataLocations.set(data, snapshot.directory);
+  return data;
+}
+
+export function sameDataLocation(a: AppData, b: AppData): boolean {
+  return dataLocations.get(a) === dataLocations.get(b);
+}
+
+export interface AutoBackupSettings {
+  enabled: boolean; directory: string; frequency: "daily" | "weekly" | "monthly"; generations: number;
+  lastSuccess: string; lastError: string;
+}
+export interface BackupRestorePreview {
+  token: string; createdAt: string; eventCount: number; deletedEventCount: number;
+  soundCount: number; googleAccountCount: number; targetDirectory: string;
+}
+export async function getAutoBackup(): Promise<AutoBackupSettings> {
+  if (!isTauriRuntime()) return { enabled: false, directory: "", frequency: "daily", generations: 10, lastSuccess: "", lastError: "" };
+  const { invoke } = await import("@tauri-apps/api/core");
+  return invoke("get_auto_backup");
+}
+export async function configureAutoBackup(settings: Pick<AutoBackupSettings, "enabled" | "directory" | "frequency" | "generations">): Promise<AutoBackupSettings> {
+  const { invoke } = await import("@tauri-apps/api/core");
+  return invoke("configure_auto_backup", settings);
+}
+export async function runDueBackup(): Promise<string | null> {
+  if (!isTauriRuntime()) return null;
+  const { invoke } = await import("@tauri-apps/api/core");
+  return invoke("run_due_backup");
+}
+export async function chooseBackupFile(save: boolean): Promise<string | null> {
+  const { invoke } = await import("@tauri-apps/api/core");
+  return invoke("choose_backup_file", { save });
+}
+export async function exportBackup(destination: string): Promise<string> {
+  const { invoke } = await import("@tauri-apps/api/core");
+  return invoke("export_backup", { destination });
+}
+export async function previewBackupRestore(archive: string, target: string): Promise<BackupRestorePreview> {
+  const { invoke } = await import("@tauri-apps/api/core");
+  return invoke("preview_backup_restore", { archive, target });
+}
+export async function applyBackupRestore(token: string): Promise<AppData> {
+  const { invoke } = await import("@tauri-apps/api/core");
+  return readSnapshot(await invoke<CalendarSnapshot>("apply_backup_restore", { token }));
+}
 
 export function isTauriRuntime(): boolean {
   return "__TAURI_INTERNALS__" in window;
@@ -138,25 +190,44 @@ export function normalizeData(value: unknown): AppData {
 export async function loadAppData(): Promise<AppData> {
   if (isTauriRuntime()) {
     const { invoke } = await import("@tauri-apps/api/core");
-    return normalizeData(await invoke<AppData>("load_app_data"));
+    return readSnapshot(await invoke<CalendarSnapshot>("load_app_data"));
   }
 
   const stored = localStorage.getItem(WEB_STORAGE_KEY) ?? localStorage.getItem(LEGACY_WEB_STORAGE_KEY);
   if (!stored) return structuredClone(DEFAULT_DATA);
   try {
-    return normalizeData(JSON.parse(stored));
+    const value = JSON.parse(stored);
+    if (!value || ![1, 2, 3, 4, DATA_VERSION].includes(value.version) || !Array.isArray(value.events)) {
+      throw new Error("Unsupported calendar data");
+    }
+    return normalizeData(value);
   } catch {
-    return structuredClone(DEFAULT_DATA);
+    throw new Error("保存データを読み込めません。元のデータを保護するため、空のカレンダーでの開始を停止しました。");
   }
 }
 
-export async function saveAppData(data: AppData): Promise<void> {
+export async function saveAppData(data: AppData, base: AppData): Promise<AppData> {
   if (isTauriRuntime()) {
     const { invoke } = await import("@tauri-apps/api/core");
-    await invoke("save_app_data", { data });
-    return;
+    // The backend checks again under a process-shared file lock. Retry only
+    // the read/merge/save operation, never an actual conflicting edit.
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const latest = await loadAppData();
+      if (!dataLocations.has(base) || dataLocations.get(base) !== dataLocations.get(latest)) {
+        throw new Error("保存先が別の画面で変更されました。入力を控えて編集を閉じ、最新の保存先を確認してください。");
+      }
+      const merged = mergeAppData(base, data, latest);
+      try {
+        return readSnapshot(await invoke<CalendarSnapshot>("save_app_data", { data: merged, expected: latest, expectedDirectory: dataLocations.get(latest) }));
+      } catch (error) {
+        if (!String(error).startsWith("DATA_CHANGED:")) throw error;
+      }
+    }
+    throw new Error("別の画面で保存が続いています。入力を残していますので、少し待ってもう一度保存してください。");
   }
-  localStorage.setItem(WEB_STORAGE_KEY, JSON.stringify(data));
+  const merged = mergeAppData(base, data, await loadAppData());
+  localStorage.setItem(WEB_STORAGE_KEY, JSON.stringify(merged));
+  return merged;
 }
 
 export async function setSidebarWindowMode(collapsed: boolean): Promise<void> {
@@ -177,6 +248,39 @@ export async function getDataDirectory(): Promise<string> {
     return invoke<string>("get_data_directory");
   }
   return "Webプレビュー: このブラウザーのlocalStorage";
+}
+
+export interface StorageInfo { directory: string; defaultDirectory: string; available: boolean }
+export interface StoragePreview {
+  token: string;
+  sourceDirectory: string;
+  targetDirectory: string;
+  sourceEventCount: number | null;
+  targetEventCount: number | null;
+}
+
+export async function getStorageInfo(): Promise<StorageInfo> {
+  if (!isTauriRuntime()) return { directory: "Webプレビュー: このブラウザーのlocalStorage", defaultDirectory: "", available: true };
+  const { invoke } = await import("@tauri-apps/api/core");
+  return invoke<StorageInfo>("get_storage_info");
+}
+
+export async function chooseStorageDirectory(): Promise<string | null> {
+  if (!isTauriRuntime()) throw new Error("保存先の変更はWindowsアプリ版で利用できます");
+  const { invoke } = await import("@tauri-apps/api/core");
+  return invoke<string | null>("choose_storage_directory");
+}
+
+export async function previewStorageDirectory(directory: string): Promise<StoragePreview> {
+  if (!isTauriRuntime()) throw new Error("保存先の変更はWindowsアプリ版で利用できます");
+  const { invoke } = await import("@tauri-apps/api/core");
+  return invoke<StoragePreview>("preview_storage_directory", { directory });
+}
+
+export async function applyStorageDirectory(token: string, mode: "copyCurrent" | "useExisting"): Promise<AppData> {
+  if (!isTauriRuntime()) throw new Error("保存先の変更はWindowsアプリ版で利用できます");
+  const { invoke } = await import("@tauri-apps/api/core");
+  return readSnapshot(await invoke<CalendarSnapshot>("apply_storage_directory", { token, mode }));
 }
 
 export async function getAutoStartState(): Promise<boolean | null> {
@@ -297,6 +401,6 @@ export async function syncGoogleCalendars(): Promise<GoogleSyncResult> {
     };
   }
   const { invoke } = await import("@tauri-apps/api/core");
-  const result = await invoke<GoogleSyncResult>("google_sync_all");
-  return { ...result, data: normalizeData(result.data) };
+  const result = await invoke<GoogleSyncResult & { directory: string }>("google_sync_all");
+  return { ...result, data: readSnapshot(result) };
 }

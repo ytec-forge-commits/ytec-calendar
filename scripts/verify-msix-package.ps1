@@ -70,7 +70,16 @@ try {
         "assets\Square150x150Logo.png",
         "legal\LICENSE.txt",
         "legal\NOTICE",
-        "legal\THIRD_PARTY_NOTICES.md"
+        "legal\THIRD_PARTY_NOTICES.md",
+        "legal\PRIVACY.en.md",
+        "docs\Koyomado操作説明書.pdf",
+        "docs\Koyomado-Manual.en.pdf",
+        "docs\Koyomado.en.pdf",
+        "legal\ASSET_PROVENANCE.md",
+        "docs\asset-manifest.json",
+        "legal\third_party\dependency-licenses\index.json",
+        "legal\third_party\mpl-source\index.json",
+        "legal\third_party\rust-backup\zip-9.0.4-LICENSE.txt"
     )
     foreach ($requiredFile in $requiredFiles) {
         if (-not (Test-Path -LiteralPath (Join-Path $unpackPath $requiredFile) -PathType Leaf)) {

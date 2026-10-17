@@ -694,6 +694,18 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   .notification-actions { display: grid; grid-template-columns: 1fr 1fr; }
 }
 
+@media (max-width: 420px) {
+  .event-date-row { grid-template-columns: minmax(0, 1fr); }
+  .event-date-row > .time-separator { display: none; }
+}
+
+.storage-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.data-location code { white-space: normal; overflow-wrap: anywhere; text-overflow: clip; }
+.storage-preview { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--border-strong); border-radius: 12px; }
+.storage-preview h4, .storage-preview p { margin: 0; }
+.storage-preview button { white-space: normal; }
+.fatal-state .data-location { width: min(100%, 680px); text-align: left; }
+
 @media (max-height: 650px) {
   .day-cell { padding: 3px; }
   .day-cell-head { height: 22px; }
@@ -706,3 +718,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+.backup-settings fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+.backup-settings legend { font-weight: 700; margin-bottom: 8px; }
+.backup-settings h4 { margin: 20px 0 10px; }
+.backup-settings button { white-space: normal; }
+.backup-status { overflow-wrap: anywhere; }

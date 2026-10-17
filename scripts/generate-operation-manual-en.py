@@ -14,7 +14,7 @@ spec.loader.exec_module(manual)
 
 OFFICIAL = "https://ytec.cloudfree.jp/forge/en/projects/koyomado/"
 STORE = "https://apps.microsoft.com/detail/9P6WFRBWG8X5"
-TOTAL_PAGES = 27
+TOTAL_PAGES = 31
 
 # The Japanese labels match the shipped interface; screenshots are not an English UI.
 PAGES = [
@@ -82,7 +82,7 @@ PAGES = [
         ("Two separate locations", "Portable: data beside koyomado.exe. Store: %LOCALAPPDATA%/Packages/Y-TEC.Koyomado_y7q84f7nwz24j/LocalState/Koyomado/data. These locations are not silently merged."),
         ("Back up first", "Quit the app and copy the entire data folder to another location. It contains calendar-data.json, its backup, window-state.json and optional notification-sounds. Do this before updates, uninstalling the Store edition or resetting the PC."),
         ("Update the portable edition", "Extract the new ZIP separately. Replace the executable and bundled documents, but retain your existing data folder; do not overwrite it with the empty distribution folder."),
-        ("Move between editions", "Quit both editions, initialize and quit the destination edition once, then copy the data folder contents. Keep the original until events, settings and sounds have been checked. Do not run both against the same Google events: duplicate sync/reminders can result."),
+        ("Move between editions", "With both editions at 1.1.0 or later, export a calendar backup ZIP and restore it into an empty destination folder; see the migration chapter. Preserve the source until events, settings and sounds have been checked. Google requires reconnection and an initial receive-and-reconcile pass. Concurrent notifications from separate running editions can still occur."),
         ("Old formats and accounts", "Versions 1-4 migrate to format 5 with versioned backups. Google refresh tokens stay in Windows Credential Manager, not this folder. Another PC requires reauthentication. On one PC, disconnecting an account in one edition can affect the other."),
     ], [], []),
     ("GOOGLE CALENDAR", "Optional Google synchronization", "Google integration is initially OFF. Koyomado does not use a shared Y-TEC OAuth client.", [
@@ -140,7 +140,7 @@ PAGES = [
         ("Target calendar", "Choose 「同期するカレンダー」 (calendar to sync). After the first synchronization it is locked to prevent accidental relinking. To change it, disconnect and reconnect."),
         ("Account and event switches", "Enable 「このアカウントと同期」 for the account. In 「新しい予定の既定の保存先」 choose one/multiple/all accounts, or none for local only. An event's destinations can be adjusted individually; imported Google events retain their original source link."),
         ("When sync happens", "At startup/re-show, about every 60 seconds while the app is displayed, after event changes, or by 「今すぐ同期」 (Sync now). Check the last-sync time and any error."),
-        ("Main and secondary PCs", "Use separate Koyomado folders and authenticate on each PC, with Google as the shared calendar. Do not run the same Google Drive folder on two PCs simultaneously: local JSON file conflicts are not resolved by Koyomado."),
+        ("Main and secondary PCs", "Concurrent startup from a shared folder is supported with 1.1.0 or later on every PC. Wait for Drive sync before and after editing, avoid simultaneous edits to the same event, and keep independent backups. Changes not yet synchronized cannot be detected or locked. Separate folders sharing Google remain an alternative."),
         ("Try a synthetic event", "If needed, test one clearly marked, non-sensitive event with your own test account. Check both sides and remove it from both when finished."),
     ], [], []),
     ("GOOGLE TROUBLE", "Conflicts, disconnecting and errors", "The application preserves both edited versions when it detects conflicting changes.", [
@@ -153,12 +153,43 @@ PAGES = [
     ("HELP", "Troubleshooting and support", "Check the displayed month, the taskbar/tray, and the data directory of the edition you are using.", [
         ("Missing events or window", "Open the correct month and daily list. Check hidden tray icons. If the saved position is off-screen, Koyomado brings it into view for the current monitor setup."),
         ("Reminders or sounds", "The app must be running. Check the event's reminder time, mute/sound choice and volume. Sleep-time or closed-app notifications are not replayed as a backlog."),
-        ("Damaged data", "Koyomado tries the previous backup and preserves a damaged file with a corrupt suffix. If manual recovery is necessary, quit the app, retain the current files and restore your own backup to the correct edition's data folder."),
+        ("Damaged data", "Koyomado checks recoverable backups and completed temporary writes. If existing data cannot be recovered, it stops empty initialization. Stop edits on every PC, retain the complete source, and restore a calendar backup ZIP into another empty folder. Do not overwrite an unrecoverable source blindly."),
         ("Scope and license", "There is no printing, event PDF export, advertising, analytics or independent Koyomado cloud service. External application communication is the optional Google integration. See LICENSE.txt (Apache-2.0), PRIVACY.md and the third-party notices."),
         ("Contact safely", "Include the application/Windows versions, steps and non-sensitive error text. Do not send actual events, account addresses, OAuth JSON, tokens, passwords or personal information."),
     ], [], [("Public product page", OFFICIAL), ("Contact", manual.CONTACT_URL), ("Source", manual.SOURCE_URL)]),
 ]
 
+
+
+PAGES.extend([
+    ("DATA LOCATION", "Choose a calendar data folder", "Store and portable editions can select a folder readable and writable by this PC, including a Google Drive folder synchronized by its desktop client.", [
+        ("Prepare and check", "Preserve the complete source data first. Open Settings, then 「予定データの保存先」 (calendar data location). Choose 「フォルダーを選択」 and 「このフォルダーを確認」. Create a dedicated empty folder for a new copy; an existing calendar needs calendar-data.json or a recoverable backup."),
+        ("Choose the intended action", "For an empty target, copy current data and switch after verification. To use an existing calendar, explicitly choose it; it is not merged automatically with the current calendar. Confirm event counts and notifications before normal use. The original is retained."),
+        ("Per-PC settings", "The selected location and automatic-backup configuration are PC-specific. Window placement remains in the edition's standard data location. Google tokens remain in Windows Credential Manager. Another PC can use a different drive letter."),
+        ("If the drive is unavailable", "The app does not silently initialize an empty calendar in the default directory. Wait for the drive and synchronization, or explicitly choose an existing data folder. Switching is blocked during an active edit or Google sync."),
+        ("Shared data", "Idle apps refresh file changes without restarting. Saving combines compatible edits to different events; a conflict in the same event, recurring series or settings stops saving and preserves the draft. Record your draft before closing an editor to refresh. Remote changes not yet synchronized remain outside this local protection."),
+    ], [], []),
+    ("ZIP BACKUP", "Save an important-data ZIP", "Use the application backup command; an application distribution ZIP is not a calendar backup. Backups are not encrypted.", [
+        ("Export", "In Settings > 「ZIPバックアップ・復元」, choose 「ZIPの保存先を選択」 or enter a new filename outside the active data folder. Choose 「ZIPを保存する」 and wait for the saved-and-verified result. Existing ZIPs are not overwritten."),
+        ("Included", "Current and deleted-event records, appearance settings, notification settings and local custom sounds are included. Versioned entries, size limits and SHA-256 checks validate the important payload."),
+        ("Excluded", "OAuth client credentials, login tokens, PC-specific location/automatic-backup settings and previous history files are excluded. Keep the original OAuth JSON privately if you need it for reconnection."),
+        ("Store uninstall and disaster recovery", "Save outside Store LocalState and outside the active data folder before uninstalling or reinstalling. Copy a verified ZIP to separate storage. ZIPs and local calendar/history JSON can contain private schedules and account information; manage access yourself."),
+    ], [], []),
+    ("RESTORE AND MIGRATE", "Restore across editions safely", "Self-signed portable to Store, and Store to self-signed portable, use the same calendar backup format. Both editions need 1.1.0 or later.", [
+        ("Prepare", "Stop source edits, export a ZIP and retain the original. On the destination, create a dedicated empty folder. For old 1.0.0 data, preserve the folder before updating, or select its existing data folder with the new location controls."),
+        ("Preview", "Choose 「復元するZIPを選択」, select the empty destination with 「復元先フォルダーを選択」, then choose 「ZIPの内容を確認」. Check the preview counts, sound files and Google-account information."),
+        ("Restore and switch", "Choose 「確認したZIPを復元して切り替える」. Contents are validated and written into the empty destination; the running app switches without a restart. Existing source or destination calendars are not overwritten or merged. Verify event dates, multi-day durations, recurrence and custom sounds."),
+        ("Google duplicate protection", "Restoration disables Google integration and account sync, removes OAuth client settings and retains reconciliation links. Re-import your own client, reauthorize, enable the intended account and run sync. The first pass receives a complete calendar and reconciles existing IDs without uploading or deleting events. Unmatched originals stay local; cancelled recurring occurrences remain excluded."),
+        ("After migration", "Reconfigure automatic backups on the destination. Never enable Google integration on multiple restored copies without deciding which calendar is active. Preserve both the source and the ZIP until the destination has been checked."),
+    ], [], []),
+    ("AUTOMATIC BACKUP", "Choose an interval and retention", "Automatic backup runs while Koyomado is running. No background Windows service or closed-app scheduler is installed.", [
+        ("Enable", "Create a backup folder outside the active calendar data folder. In Settings, enable 「自動バックアップを有効にする」 and select that folder. Choose daily, weekly (Monday boundary) or monthly (first-day boundary)."),
+        ("Retention", "Set 「残す世代数（1～100）」 to the number of generations to retain, default 10. Choose 「自動バックアップ設定を保存」 and check the last-success or error information. A due backup can run when settings are saved."),
+        ("Timing", "At most one due backup is created per selected period while the app runs. If the app was closed, the next run handles the current due period; it does not reconstruct every missed past period. A damaged source is not turned into an empty backup."),
+        ("Safe cleanup", "A new ZIP must be saved and verified before older generations owned by this same configuration are removed. Manual ZIPs, ZIPs belonging to another configuration, unknown files and files changed outside the app are retained. Changing a destination can leave older series in the original folder."),
+        ("Capacity and failures", "Choose a location with free space and an independent copy for disaster recovery. On an error, the app reports it rather than deleting the last backup. Generation retention applies to automatic ZIPs; the separate calendar-history JSON folder is not automatically pruned by this setting."),
+    ], [], []),
+])
 
 def decorate_page(canvas, doc):
     if doc.page <= 1:
@@ -183,12 +214,12 @@ def generate(output):
     logo = Image(str(manual.ROOT / "src/assets/koyomado-logo.png"), 22 * mm, 22 * mm)
     logo.hAlign = "CENTER"
     story = [logo, Spacer(1, 4 * mm), manual.p("Koyomado", styles["cover_title"]),
-             manual.p(f"User Guide v{manual.VERSION}<br/>Revised September 29, 2026", styles["cover_subtitle"]),
+             manual.p(f"User Guide v{manual.VERSION}<br/>Updated October 17, 2026", styles["cover_subtitle"]),
              manual.screenshot("calendar-v1.png", 145 * mm), Spacer(1, 5 * mm),
              manual.p("Windows 10/11 x64. The application interface is Japanese; this guide explains its controls in English. Store and portable editions have separate data locations. Google integration is optional and initially off.", styles["body"]),
              manual.url_link("Public product page", OFFICIAL, styles), manual.url_link("Source", manual.SOURCE_URL, styles),
              manual.url_link("Contact", manual.CONTACT_URL, styles),
-             manual.p("For republication, the source, distribution and documents were reviewed, and the executable and both guides were newly generated. Application features and storage format remain unchanged from v1.0.0.", styles["muted"]), PageBreak()]
+             manual.p("Version 1.1.0 adds selectable data folders, ZIP backup/restore, automatic backups and shared-data protection. These features require 1.1.0 or later on every edition and PC sharing the data. The existing calendar format remains version 5.", styles["muted"]), PageBreak()]
     for index, (kicker, title, lead, sections, images, links) in enumerate(PAGES):
         manual.page_title(story, styles, kicker, title, lead)
         for heading, body in sections:

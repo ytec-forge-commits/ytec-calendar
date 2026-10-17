@@ -4,31 +4,13 @@
 
 Koyomado is a simple Windows calendar that can sit on your desktop like a widget. It is distributed as a Microsoft Store app for general use and as a portable folder that can be carried on USB storage or Google Drive.
 
+**Version 1.1.0 (2026-10-17)** adds selectable data folders, ZIP backup/restore, automatic backups and shared-data protection. Store and Vector availability follows their review/update process. These features require version 1.1.0 or later. The application UI is in Japanese; the [English operation manual](docs/Koyomado-Manual.en.pdf) explains the Japanese button labels. A [Japanese manual](docs/Koyomado操作説明書.pdf), [English changelog](CHANGELOG.en.md) and [English privacy policy](PRIVACY.en.md) are also available.
+
 - Official website: https://ytec.cloudfree.jp/forge/en/projects/koyomado/
 - Microsoft Store (recommended): https://apps.microsoft.com/detail/9P6WFRBWG8X5
-- Portable edition: https://github.com/ytec-forge-commits/ytec-calendar/releases/tag/v1.0.0-republish-20260929
+- Portable edition: https://github.com/ytec-forge-commits/ytec-calendar/releases/tag/v1.1.0
 - Supported operating systems: Windows 10 / 11 (64-bit)
 - License: Apache License 2.0
-- Contact: https://ytec.cloudfree.jp/forge/contact/
-
-## Republication
-
-For the September 29, 2026 republication, the private canonical source was reviewed without carrying over old Git history or distribution artifacts. Source, dependency notices and manuals were checked; the Windows executable and both PDFs are newly generated. Application behavior, v1.0.0 and storage format version 5 are unchanged. The Release tag's `republish-20260929` suffix identifies this distribution.
-
-The existing application interface remains Japanese. This README and `docs/Koyomado.en.pdf` provide English instructions, including the actual Japanese control labels. The Japanese guide is `docs/Koyomado操作説明書.pdf`. See [ASSET_PROVENANCE.md](ASSET_PROVENANCE.md) for asset attestations and the limits of the checks.
-
-### Generate The Manuals
-
-Python, ReportLab and pypdf are required. Check that explanatory images contain no actual user data before generation.
-
-```powershell
-python scripts/generate-operation-manual.py
-python scripts/generate-operation-manual-en.py
-python scripts/test-operation-manual.py
-python scripts/test-portable-package.py
-```
-
-Run the portable packaging test after a fresh native build. Visually check the generated PDFs, not just their page counts or extracted text.
 
 ## Main features
 
@@ -56,7 +38,7 @@ Koyomado does not include printing, PDF export, advertising, analytics, or a pro
 
 ## Getting started
 
-1. For everyday use, install the [Microsoft Store edition](https://apps.microsoft.com/detail/9P6WFRBWG8X5). When portability is needed, extract the [portable edition](https://github.com/ytec-forge-commits/ytec-calendar/releases/tag/v1.0.0-republish-20260929) ZIP where you intend to keep it.
+1. For everyday use, install the [Microsoft Store edition](https://apps.microsoft.com/detail/9P6WFRBWG8X5). When portability is needed, extract the [portable edition](https://github.com/ytec-forge-commits/ytec-calendar/releases/tag/v1.1.0) ZIP where you intend to keep it.
 2. Launch the Store edition from the Start menu, or run `koyomado.exe` for the portable edition.
 3. Open the gear menu in the upper-right corner and configure the display mode and Windows startup behavior.
 4. Move and resize the window as desired. Koyomado will restore that placement the next time it starts with the same monitor configuration.
@@ -104,9 +86,24 @@ Event data and synchronization settings are stored in the data folder for the ed
 | Microsoft Store | `%LOCALAPPDATA%\Packages\Y-TEC.Koyomado_y7q84f7nwz24j\LocalState\Koyomado\data` | Microsoft Store | Microsoft Store distribution signature |
 | Portable | `data` next to `koyomado.exe` | Extract the new ZIP and preserve the existing `data` | Y-TEC self-signature plus published SHA-256 |
 
-The editions use separate data locations. To switch, exit both editions, launch and exit the Store edition once, then copy the contents of the old `data` folder to the new location. Keep the source as a backup until events, settings, and custom sounds have been verified. Do not run both editions at the same time; this can duplicate Google synchronization and reminders. On the same PC they share Google refresh tokens in Windows Credential Manager, so disconnecting an account in one edition requires reauthorization in the other.
+The editions use separate default data locations. For manual migration from published v1.0.0, exit both editions, launch and exit the Store edition once, then copy the contents of the old `data` folder to the new location. Keep the source as a backup until events, settings, and custom sounds have been verified. The corrected source also supports folder selection below. Concurrent use can duplicate Google synchronization and reminders. On the same PC they share Google refresh tokens in Windows Credential Manager, so disconnecting an account in one edition requires reauthorization in the other.
 
 Store-edition data is held in the package `LocalState`. Store updates normally retain it, but uninstalling the app can remove it. Before uninstalling or resetting Windows, exit Koyomado and copy the Store `data` folder to a separate backup location. Portable data remains next to the executable unless it is overwritten during a ZIP update.
+
+### Choosing a data folder (1.1.0)
+
+Both editions can select a Google Drive or other locally accessible sync folder in Settings > Calendar data location. Select a Windows folder, not a Drive web URL.
+
+1. Create a dedicated empty folder, or select the existing portable `data` folder containing `calendar-data.json`.
+2. Use the folder picker or enter a path and inspect it. Review event counts and the proposed action before confirming; inspection does not change the active location.
+3. For an empty folder, copy current data. Events, backups, history and custom sounds are copied and verified before the location changes. The source remains intact.
+4. For an existing calendar, explicitly use its data. The two calendars are not merged and neither is overwritten.
+
+No app restart is required. Idle windows notice a location change, including when event contents are identical. An open editor keeps its input and refuses to save old-location changes into the new folder. An unavailable folder never silently falls back to the default or initializes empty data. The error screen can select another existing calendar.
+
+Window positions stay in the original default folder. Location selection is PC-local: Store uses `LocalState/Koyomado/storage-location.json`; portable uses installation-specific files under `%LOCALAPPDATA%/Koyomado/storage-locations/`. Select the shared folder separately on each PC. Google refresh tokens remain in that PC's Windows Credential Manager. To return, specify the default folder and review its existing data before confirming.
+
+Copy, verification or pointer-commit failure retains the previous active location. Partial copies are not deleted automatically: preserve the source and retry in a different empty folder. Avoid editing on other PCs during switching and wait for Drive to finish syncing. This does not automatically resolve undelivered or offline Drive conflicts.
 
 ### Contents of the data folder
 
@@ -126,9 +123,35 @@ The event editor can schedule pop-up reminders from the event start time up to 2
 
 The settings screen includes “Yawaragi,” “Deep Drop,” “Small Bell,” “Morning Dew Piano,” and “Sunlight Kalimba,” as well as silent mode and a user-supplied sound. Custom sounds can be up to 15 MB and use MP3, M4A, AAC, WAV, OGG, Opus, FLAC, or MIDI. MIDI files are played with Koyomado's built-in gentle instrument, so they may sound different from the original sound source. Actual format support also depends on the codecs available to Windows WebView2.
 
-When using Koyomado from Google Drive, do not run the same folder simultaneously on multiple computers. Koyomado cannot resolve file-level conflicts created by Google Drive itself.
+### Concurrent use and data protection (1.1.0)
+
+You can run the same portable folder on multiple PCs. **The protection below requires version 1.1.0 or later. Use 1.1.0 or later on every PC sharing the folder.** Mixed use with older versions is not protected.
+
+While idle, the app checks for saved changes about every two seconds and when brought back into view. Editing keeps your input intact. Before saving, changes to separate events or settings are combined with the latest data. Conflicting changes to the same event, recurring series, or setting stop the save and leave your draft in the editor. Copy or record the input before closing the editor; the latest data can then load without restarting the app.
+
+Windows also serializes local processes accessing the same calendar file. Saving replaces the primary without deleting it first. A missing or corrupt primary can recover from a backup or complete temporary file. Evidence of unrecoverable existing data stops empty initialization.
+
+Before and after calendar writes, separate JSON snapshots are retained in `data/calendar-history/`. They contain events, deleted events and settings: keep them private just like the primary. History is not deleted automatically and grows with use. To restore, exit the app on all PCs, copy the entire `data` folder to a separate backup, inspect a history JSON, then copy it to `calendar-data.json`. A newer timestamp alone does not establish which snapshot is correct across PCs. Keep the original primary, backups and history.
+
+Changes that Google Drive has not yet delivered, including offline edits, cannot be detected locally. History supports recovery; it does not automatically resolve Drive conflicts. Check that Drive has finished syncing before editing and maintain a separate backup of important events.
+
+### ZIP backup and restore (1.1.0)
+
+Settings can export and restore a Koyomado backup ZIP containing current events, deleted events, appearance settings and custom sounds. OAuth client configuration, credential-manager tokens, PC-local paths, window position, automatic-backup settings and historical JSON snapshots are excluded. ZIPs are not encrypted and contain private event/account information. Keep them private and retain the original OAuth client JSON separately.
+
+Choose a ZIP and an empty dedicated restore folder, inspect its date/counts, then confirm. Files are extracted and verified before switching locations without a restart. Neither the old calendar nor the ZIP is overwritten or merged. An incomplete restore is blocked; retry in another empty folder. Backup format v1 checks SHA-256, allowed paths and supported calendar versions. Limits: 256 MB total, 32 MB per file, 2048 entries.
+
+Google integration is disabled after restore. Reimport the OAuth client and reauthorize. The first sync of each restored account downloads the complete remote calendar and reconciles by Google event ID or original Koyomado ID, without remote creates, updates or deletes. Linked events use Google's latest content. Unmatched restored events remain local with synchronization targets removed; old deletion records are not sent to Google. The original restore content remains in the ZIP. Subsequent syncs use normal behavior. Live Google API restore integration testing is still required.
+
+#### Move between the self-signed and Store editions
+
+Both editions must support ZIP backups (1.1.0 or later). In either direction, stop editing the source, export a backup from Settings, then restore it in the destination edition into a dedicated empty folder. **The application distribution ZIP is not a calendar backup.** Retain both the source and the backup until events, multi-day durations, recurrence and custom sounds are verified. Reconfigure Google authorization and automatic backups on the destination. Before uninstalling the Store edition, save the ZIP outside its LocalState. For old 1.0.0 data, preserve it before updating, or select its existing data folder using the location feature above.
+
+Automatic backup settings are PC-local: select a separate folder, daily/weekly (Monday boundary)/monthly (first-day boundary), and 1–100 retained generations (default 10). While running, the app checks approximately every 60 seconds, once per period; a missed period creates one backup at next launch. Only after a new ZIP is successfully written, reread and verified are older unchanged files recorded for this automatic series removed. Manual ZIPs and other series are excluded. Old folders, files that could not be safely pruned and unregistered ZIPs from an interrupted run may remain; check the error status. Calendar history JSON files are outside this retention policy.
 
 ## Development
+
+Building the ZIP feature from source requires Rust 1.88 or newer, matching `zip 9.0.4`.
 
 Development requires Node.js, npm, stable Rust, and the Windows development environment required by Tauri 2.
 
@@ -162,7 +185,7 @@ MSIX packaging uses MakeAppx from the Windows SDK. Use the exact Package Identit
 
 ```powershell
 npm run tauri:build
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-msix.ps1 -SkipBuild -PackageVersion 1.0.0.0 -CreateUpload
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-msix.ps1 -SkipBuild -PackageVersion 1.1.0.0 -CreateUpload
 npm run test:store-submission
 ```
 
@@ -177,7 +200,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/new-self-signed-code
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-self-signed-direct.ps1 -CertificateThumbprint <shown-thumbprint>
 ```
 
-This produces the portable ZIP, a public-key-only `.cer`, the Japanese and English manuals, and `SHA256SUMS.txt`. The signature receives an RFC 3161 timestamp. A self-signature does not guarantee that SmartScreen warnings disappear. No certificate is automatically added to a user's Trusted Root store.
+This produces the portable ZIP, a public-key-only `.cer`, the manual, and `SHA256SUMS.txt`. The signature receives an RFC 3161 timestamp. A self-signature does not guarantee that SmartScreen warnings disappear. No certificate is automatically added to a user's Trusted Root store.
 
 For development only, the following command creates an unsigned ZIP. Do not publish it as the signed release.
 

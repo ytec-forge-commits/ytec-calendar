@@ -1,0 +1,14 @@
+import process from 'node:process';
+import { Buffer } from 'node:buffer';
+import console from 'node:console';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+const file=process.argv[2];
+if(!file) throw new Error('Usage: node scripts/verify-release-paths.mjs <executable>');
+const bytes=readFileSync(file);
+const roots=[process.env.USERPROFILE,resolve(import.meta.dirname,'..')].filter(Boolean);
+const variants=[...new Set(roots.flatMap(p=>[p,p.replaceAll('\\','/'),p.replaceAll('/','\\')]))];
+let failures=0;
+for(const root of variants) for(const encoding of ['utf8','utf16le']) if(bytes.includes(Buffer.from(root,encoding))) failures++;
+if(failures) throw new Error(`Release executable contains machine-specific build paths (${failures} matching patterns).`);
+console.log('PASS: executable contains no current user-profile or project-root build paths.');

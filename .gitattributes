@@ -1,1 +1,6 @@
 *.pdf binary
+
+# Preserve the exact bytes recorded by the license inventories.
+third_party/dependency-licenses/** -text
+third_party/rust-backup/** -text
+third_party/dependency-licenses/index.json text eol=lf

@@ -1,13 +1,13 @@
 [package]
 name = "koyomado"
-version = "1.0.0"
+version = "1.1.0"
 description = "持ち運べるWindows用カレンダー"
 authors = ["Y-TEC"]
 license = "Apache-2.0"
 repository = "https://github.com/ytec-forge-commits/ytec-calendar"
 homepage = "https://ytec.cloudfree.jp/forge/projects/koyomado/"
 edition = "2021"
-rust-version = "1.77.2"
+rust-version = "1.88"
 
 [lib]
 name = "koyomado_lib"
@@ -23,9 +23,12 @@ oauth2 = { version = "5.0.0", features = ["reqwest-blocking"] }
 reqwest = { version = "0.12.23", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+sha2 = "0.10.9"
+zip = { version = "=9.0.4", default-features = false, features = ["deflate-flate2"] }
+flate2 = { version = "1.1", default-features = false, features = ["rust_backend"] }
 tauri = { version = "2.11.0", features = ["tray-icon"] }
 url = "2.5.4"
 windows-sys = { version = "0.59.0", features = ["Win32_Foundation", "Win32_Security_Credentials", "Win32_Storage_Packaging_Appx", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
 
 [target.'cfg(windows)'.dependencies]
-windows = { version = "0.61.3", features = ["ApplicationModel", "Storage", "Storage_Search"] }
+windows = { version = "0.61.3", features = ["ApplicationModel", "Storage", "Storage_Search", "Win32_Foundation", "Win32_System_Com", "Win32_UI_Shell", "Win32_UI_Shell_Common"] }

@@ -1,6 +1,6 @@
 {
   "platform": "x86_64-pc-windows-msvc",
-  "lockfilesUnchanged": true,
+  "lockfilesUnchanged": false,
   "packages": [
     {
       "ecosystem": "npm",
@@ -6227,6 +6227,39 @@
           "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3"
         }
       ]
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "zip",
+      "version": "9.0.4",
+      "license": "MIT",
+      "source": "https://static.crates.io/crates/zip/zip-9.0.4.crate",
+      "scope": "Windows dependency, added for calendar backup in 1.1.0",
+      "modified": false,
+      "notices": [
+        {
+          "originalPath": "LICENSE.txt",
+          "file": "cargo-zip-9.0.4--LICENSE-MIT.txt",
+          "sha256": "58545fed1565e42d687aecec6897d35c6d37ccb71479a137c0deb2203e125c79"
+        }
+      ]
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "typed-path",
+      "version": "0.12.3",
+      "license": "MIT",
+      "source": "https://static.crates.io/crates/typed-path/typed-path-0.12.3.crate",
+      "scope": "Windows dependency, added for calendar backup in 1.1.0",
+      "modified": false,
+      "notices": [
+        {
+          "originalPath": "LICENSE-MIT",
+          "file": "cargo-typed-path-0.12.3--LICENSE-MIT.txt",
+          "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3"
+        }
+      ]
     }
-  ]
+  ],
+  "updatedForVersion": "1.1.0"
 }

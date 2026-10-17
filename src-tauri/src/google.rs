@@ -7,6 +7,7 @@ use oauth2::{
 };
 use reqwest::blocking::Client;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use std::path::Path;
 use std::{
     collections::BTreeMap,
     io::{Read, Write},
@@ -20,10 +21,10 @@ use url::Url;
 use windows_sys::Win32::UI::{Shell::ShellExecuteW, WindowsAndMessaging::SW_SHOWNORMAL};
 
 use super::{
-    default_true, load_app_data_inner, portable_data_dir, write_json_with_backup, AppData,
-    CalendarEvent, DeletedCalendarEvent, EventOrigin, EventRecurrence, EventReminders, EventStyle,
-    GoogleAccount, GoogleEventLink, GoogleOAuthClient, RecurrenceEnd, RecurrenceException,
-    SyncConflict, APP_DATA_LOCK,
+    default_true, load_app_data_from_path, load_app_data_inner, save_app_data_checked, storage,
+    AppData, CalendarEvent, DeletedCalendarEvent, EventOrigin, EventRecurrence, EventReminders,
+    EventStyle, GoogleAccount, GoogleEventLink, GoogleOAuthClient, RecurrenceEnd,
+    RecurrenceException, SyncConflict, APP_DATA_LOCK,
 };
 
 const GOOGLE_AUTH_URL: &str = "https://accounts.google.com/o/oauth2/v2/auth";
@@ -215,6 +216,7 @@ pub(crate) struct GoogleSyncSummary {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct GoogleSyncResult {
+    directory: String,
     data: AppData,
     summary: GoogleSyncSummary,
 }
@@ -1530,6 +1532,118 @@ fn sync_account(
     Ok(next_sync_token)
 }
 
+fn reconcile_restored_events(
+    data: &mut AppData,
+    account: &GoogleAccount,
+    remote: &[GoogleApiEvent],
+    summary: &mut GoogleSyncSummary,
+) -> Result<(), String> {
+    let mut matched = std::collections::HashSet::new();
+    // The complete remote snapshot is authoritative for linked events. Preserve
+    // local IDs (including a backup made before its first upload) so imports
+    // cannot turn the same remote event into a second local/upload candidate.
+    for event in remote
+        .iter()
+        .filter(|e| e.status != "cancelled" && e.recurring_event_id.is_none())
+        .chain(
+            remote
+                .iter()
+                .filter(|e| e.status != "cancelled" && e.recurring_event_id.is_some()),
+        )
+    {
+        let local_id = event.extended_properties.private.get("koyomadoId");
+        let existing = data.events.iter().position(|local| {
+            remote_link_index(local, account, &event.id).is_some()
+                || local_id == Some(&local.id)
+                || local.id == stable_local_event_id(&account.id, &event.id)
+        });
+        let master = event
+            .recurring_event_id
+            .as_deref()
+            .and_then(|id| find_master_local_id(data, account, id));
+        let mut imported = local_event_from_google(account, event, master)?;
+        if let Some(index) = existing {
+            imported.id = data.events[index].id.clone();
+            imported.style = data.events[index].style.clone();
+            imported.created_at = data.events[index].created_at.clone();
+            // Preserve links to other calendars; those accounts receive their
+            // own complete reconciliation before any subsequent upload.
+            imported.google_links.extend(
+                data.events[index]
+                    .google_links
+                    .iter()
+                    .filter(|l| l.account_id != account.id)
+                    .cloned(),
+            );
+            imported.sync_targets.extend(
+                data.events[index]
+                    .sync_targets
+                    .iter()
+                    .filter(|id| *id != &account.id)
+                    .cloned(),
+            );
+            matched.insert(imported.id.clone());
+            data.events[index] = imported;
+        } else {
+            // Tombstones from an old backup must not delete a live remote event.
+            data.deleted_events
+                .retain(|d| remote_link_index(&d.event, account, &event.id).is_none());
+            matched.insert(imported.id.clone());
+            data.events.push(imported);
+        }
+        summary.pulled += 1;
+    }
+    // Full snapshots also contain cancelled recurring instances. Their parent
+    // was rebuilt above, so reapply exclusions after all parents are present.
+    // Do not delete the unmatched backup copies or send changes to Google.
+    for cancelled in remote.iter().filter(|event| event.status == "cancelled") {
+        if let (Some(remote_master), Some(original_date)) = (
+            cancelled.recurring_event_id.as_deref(),
+            cancelled
+                .original_start_time
+                .as_ref()
+                .and_then(date_from_google),
+        ) {
+            if let Some(master_id) = find_master_local_id(data, account, remote_master) {
+                if let Some(master) = data
+                    .events
+                    .iter_mut()
+                    .find(|event| event.id == master_id && matched.contains(&event.id))
+                {
+                    match master.recurrence.as_mut() {
+                        Some(EventRecurrence::Simple { excluded_dates, .. })
+                        | Some(EventRecurrence::Google { excluded_dates, .. })
+                            if !excluded_dates.contains(&original_date) =>
+                        {
+                            excluded_dates.push(original_date);
+                        }
+                        Some(_) | None => {}
+                    }
+                }
+            }
+        }
+    }
+    for event in &mut data.events {
+        if !matched.contains(&event.id) {
+            strip_account_link(event, &account.id);
+            // An old local exception must not replace an occurrence of the
+            // newly reconciled Google series. Preserve it as a standalone copy.
+            if event
+                .recurrence_exception
+                .as_ref()
+                .is_some_and(|exception| matched.contains(&exception.master_id))
+            {
+                event.recurrence_exception = None;
+            }
+        }
+    }
+    for deleted in &mut data.deleted_events {
+        strip_account_link(&mut deleted.event, &account.id);
+    }
+    summary.warnings.push(format!("{}: ZIP復元後の初回はGoogle側の最新データを受信・照合しました。Google側へ追加・更新・削除はしていません。照合できない復元予定はローカルに残しています。",account.email));
+    Ok(())
+}
+
 fn is_reauthentication_error(message: &str) -> bool {
     let lower = message.to_ascii_lowercase();
     lower.contains("認証情報がありません")
@@ -1546,17 +1660,34 @@ fn sync_all_blocking() -> Result<GoogleSyncResult, String> {
     let _data_guard = APP_DATA_LOCK
         .lock()
         .map_err(|_| "予定データの同期を開始できません".to_string())?;
-    let mut data = load_app_data_inner()?;
+    storage::with_current(sync_in_directory)
+}
+
+fn sync_in_directory(directory: &Path) -> Result<GoogleSyncResult, String> {
+    let path = directory.join("calendar-data.json");
+    let mut restore_state = super::backup::restore_state(directory)?;
+    let restore_directory = directory.to_path_buf();
+    let directory = directory.display().to_string();
+    let mut data = load_app_data_from_path(&path)?;
+    let expected = data.clone();
     let mut summary = GoogleSyncSummary::default();
 
     if !data.settings.google.enabled {
-        return Ok(GoogleSyncResult { data, summary });
+        return Ok(GoogleSyncResult {
+            data,
+            summary,
+            directory,
+        });
     }
     let Some(client) = data.settings.google.client.clone() else {
         summary
             .warnings
             .push("OAuthクライアント設定がないため同期を開始できませんでした".into());
-        return Ok(GoogleSyncResult { data, summary });
+        return Ok(GoogleSyncResult {
+            data,
+            summary,
+            directory,
+        });
     };
 
     let accounts = data.settings.google.accounts.clone();
@@ -1564,9 +1695,19 @@ fn sync_all_blocking() -> Result<GoogleSyncResult, String> {
         return Err("Googleアカウントは3件まで接続できます".into());
     }
 
+    let mut restored_accounts = Vec::new();
     for account in accounts.into_iter().filter(|account| account.sync_enabled) {
         let result = refresh_access_token(&client, &account.id).and_then(|access_token| {
-            sync_account(&mut data, &account, &access_token, &mut summary)
+            if restore_state.pending(&account.id) {
+                let (remote, next) = list_changed_events(&access_token, &account.calendar_id, "")?;
+                let mut reconciled = data.clone();
+                reconcile_restored_events(&mut reconciled, &account, &remote, &mut summary)?;
+                data = reconciled;
+                restored_accounts.push(account.id.clone());
+                Ok(next)
+            } else {
+                sync_account(&mut data, &account, &access_token, &mut summary)
+            }
         });
         let now = Utc::now().to_rfc3339();
         let Some(stored_account) = data
@@ -1597,8 +1738,18 @@ fn sync_all_blocking() -> Result<GoogleSyncResult, String> {
         }
     }
 
-    write_json_with_backup(&portable_data_dir()?.join("calendar-data.json"), &data)?;
-    Ok(GoogleSyncResult { data, summary })
+    data = save_app_data_checked(&path, data, &expected)?;
+    if !restored_accounts.is_empty() {
+        for id in restored_accounts {
+            restore_state.complete(&id);
+        }
+        restore_state.save(&restore_directory)?;
+    }
+    Ok(GoogleSyncResult {
+        data,
+        summary,
+        directory,
+    })
 }
 
 #[tauri::command]
@@ -2080,5 +2231,111 @@ mod tests {
         assert_eq!(data.events.len(), 1);
         assert_eq!(data.events[0].google_links[0].event_id, "remote-id");
         assert_eq!(summary.pulled, 0);
+    }
+
+    #[test]
+    fn restored_pre_upload_backup_is_relinked_by_local_id_even_if_google_changed() {
+        let account = account();
+        let mut local = local_event("local-id", "2026-07-22");
+        local.sync_targets.push(account.id.clone());
+        let mut remote = remote_event("remote-id", "2026-07-23");
+        remote
+            .extended_properties
+            .private
+            .insert("koyomadoId".into(), "local-id".into());
+        let mut data = AppData::default();
+        data.events.push(local);
+        let mut summary = GoogleSyncSummary::default();
+        reconcile_restored_events(&mut data, &account, &[remote], &mut summary).unwrap();
+        assert_eq!(data.events.len(), 1);
+        assert_eq!(data.events[0].id, "local-id");
+        assert_eq!(data.events[0].date, "2026-07-23");
+        assert_eq!(data.events[0].google_links[0].event_id, "remote-id");
+        assert_eq!(summary.pushed, 0);
+        assert_eq!(summary.deleted, 0);
+    }
+    #[test]
+    fn restored_unmatched_and_deleted_items_cannot_recreate_or_delete_google_events() {
+        let account = account();
+        let mut local = local_event("only-in-backup", "2026-07-22");
+        local.sync_targets.push(account.id.clone());
+        let mut data = AppData::default();
+        data.events.push(local.clone());
+        local.id = "old-deletion".into();
+        local.google_links.push(google_link(
+            &account,
+            &remote_event("remote-deleted", "2026-07-22"),
+            &local.updated_at,
+        ));
+        data.deleted_events.push(DeletedCalendarEvent {
+            event: local,
+            deleted_at: "2026-07-23T00:00:00Z".into(),
+        });
+        reconcile_restored_events(&mut data, &account, &[], &mut GoogleSyncSummary::default())
+            .unwrap();
+        assert_eq!(data.events.len(), 1);
+        assert!(data.events[0].sync_targets.is_empty());
+        assert!(data.deleted_events[0].event.google_links.is_empty());
+    }
+
+    #[test]
+    fn restored_google_cancelled_occurrence_stays_excluded_and_old_exception_is_local() {
+        let account = account();
+        let mut remote_master = remote_event("remote-master", "2026-07-01");
+        remote_master.recurrence = vec!["RRULE:FREQ=DAILY".into()];
+        remote_master
+            .extended_properties
+            .private
+            .insert("koyomadoId".into(), "master".into());
+        let master = local_event_from_google(&account, &remote_master, None).unwrap();
+        let mut master = CalendarEvent {
+            id: "master".into(),
+            ..master
+        };
+        if let Some(EventRecurrence::Google { excluded_dates, .. }) = master.recurrence.as_mut() {
+            excluded_dates.push("2026-07-08".into());
+        }
+        let mut old_exception = local_event("old-exception", "2026-07-09");
+        old_exception.recurrence_exception = Some(RecurrenceException {
+            master_id: master.id.clone(),
+            original_date: "2026-07-08".into(),
+        });
+        old_exception.sync_targets.push(account.id.clone());
+        let mut cancelled = remote_event("cancelled-instance", "2026-07-08");
+        cancelled.status = "cancelled".into();
+        cancelled.recurring_event_id = Some("remote-master".into());
+        cancelled.original_start_time = Some(GoogleEventDateTime {
+            date: Some("2026-07-08".into()),
+            ..Default::default()
+        });
+        let mut data = AppData {
+            events: vec![master, old_exception],
+            ..Default::default()
+        };
+        let mut summary = GoogleSyncSummary::default();
+        // Google results can list a cancelled occurrence before its parent.
+        reconcile_restored_events(
+            &mut data,
+            &account,
+            &[cancelled, remote_master],
+            &mut summary,
+        )
+        .unwrap();
+        let master = data.events.iter().find(|e| e.id == "master").unwrap();
+        let Some(EventRecurrence::Google { excluded_dates, .. }) = &master.recurrence else {
+            panic!("Google recurrence expected")
+        };
+        assert_eq!(excluded_dates, &["2026-07-08"]);
+        let retained = data
+            .events
+            .iter()
+            .find(|e| e.id == "old-exception")
+            .unwrap();
+        assert!(retained.recurrence_exception.is_none());
+        assert!(retained.sync_targets.is_empty());
+        assert!(retained.google_links.is_empty());
+        assert_eq!(data.events.len(), 2);
+        assert_eq!(summary.pushed, 0);
+        assert_eq!(summary.deleted, 0);
     }
 }
