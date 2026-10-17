@@ -1978,6 +1978,26 @@ mod tests {
     }
 
     #[test]
+    fn remote_restore_keeps_the_stable_id_and_separate_deletion_history() {
+        let account = account();
+        let mut data = AppData::default();
+        let mut summary = GoogleSyncSummary::default();
+        let mut remote = remote_event("synthetic-restored", "2026-10-17");
+        merge_remote_event(&mut data, &account, &remote, &mut summary).unwrap();
+        let id = data.events[0].id.clone();
+        for _ in 0..2 {
+            remote.status = "cancelled".into();
+            merge_remote_event(&mut data, &account, &remote, &mut summary).unwrap();
+            assert!(data.events.is_empty());
+            remote.status = "confirmed".into();
+            merge_remote_event(&mut data, &account, &remote, &mut summary).unwrap();
+            assert_eq!(data.events[0].id, id);
+        }
+        assert_eq!(data.deleted_events.len(), 2);
+        assert!(data.deleted_events.iter().all(|d| d.event.id == id));
+    }
+
+    #[test]
     fn oauth_client_rejects_empty_client_id() {
         let error = oauth_client(
             &GoogleOAuthClient {

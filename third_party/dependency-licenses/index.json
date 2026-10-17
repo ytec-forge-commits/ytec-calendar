@@ -3418,25 +3418,25 @@
     {
       "ecosystem": "cargo",
       "name": "rustls",
-      "version": "0.23.43",
+      "version": "0.23.45",
       "license": "Apache-2.0 OR ISC OR MIT",
-      "source": "https://crates.io/crates/rustls/0.23.43",
+      "source": "https://crates.io/crates/rustls/0.23.45",
       "scope": "Windows filtered dependency closure, including build-time components; not all entries are shipped",
       "modified": false,
       "notices": [
         {
           "originalPath": "LICENSE-APACHE",
-          "file": "cargo-rustls-0.23.43--LICENSE-APACHE.txt",
+          "file": "cargo-rustls-0.23.45--LICENSE-APACHE.txt",
           "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2"
         },
         {
           "originalPath": "LICENSE-ISC",
-          "file": "cargo-rustls-0.23.43--LICENSE-ISC.txt",
+          "file": "cargo-rustls-0.23.45--LICENSE-ISC.txt",
           "sha256": "7cfafc877eccc46c0e346ccbaa5c51bb6b894d2b818e617d970211e232785ad4"
         },
         {
           "originalPath": "LICENSE-MIT",
-          "file": "cargo-rustls-0.23.43--LICENSE-MIT.txt",
+          "file": "cargo-rustls-0.23.45--LICENSE-MIT.txt",
           "sha256": "709e3175b4212f7b13aa93971c9f62ff8c69ec45ad8c6532a7e0c41d7a7d6f8c"
         }
       ]
