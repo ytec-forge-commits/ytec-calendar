@@ -1,4 +1,4 @@
-use auto_launch::AutoLaunch;
+use auto_launch::{AutoLaunch, WindowsEnableMode};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
     collections::HashSet,
@@ -749,7 +749,12 @@ fn encode_utf16le_with_bom(content: &str) -> Vec<u8> {
 
 fn auto_start_manager(script_path: &Path) -> AutoLaunch {
     let script_argument = format!("\"{}\"", script_path.display());
-    AutoLaunch::new(AUTOSTART_ENTRY_NAME, "wscript.exe", &[script_argument])
+    AutoLaunch::new(
+        AUTOSTART_ENTRY_NAME,
+        "wscript.exe",
+        WindowsEnableMode::CurrentUser,
+        &[script_argument],
+    )
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -799,7 +804,7 @@ fn packaged_startup_state_from_windows(state: StartupTaskState) -> PackagedStart
 fn packaged_startup_task() -> Result<StartupTask, String> {
     StartupTask::GetAsync(&HSTRING::from(PACKAGED_AUTOSTART_TASK_ID))
         .map_err(|error| format!("MSIX版の自動起動設定を確認できません: {error}"))?
-        .get()
+        .join()
         .map_err(|error| format!("MSIX版の自動起動設定を確認できません: {error}"))
 }
 
@@ -825,7 +830,7 @@ fn install_packaged_auto_start() -> Result<(), String> {
             let requested_state = task
                 .RequestEnableAsync()
                 .map_err(|error| format!("MSIX版の自動起動を要求できません: {error}"))?
-                .get()
+                .join()
                 .map_err(|error| format!("MSIX版の自動起動を要求できません: {error}"))?;
             match packaged_startup_state_is_enabled(packaged_startup_state_from_windows(
                 requested_state,
