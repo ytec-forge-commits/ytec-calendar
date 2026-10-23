@@ -1,5 +1,26 @@
 # Koyomado changelog
 
+## 1.1.3 - 2026-10-17
+
+- Open the bundled PDF user guide from Settings using Windows' default viewer, without a network connection or Google sign-in.
+- Center the contact link on the Japanese guide's cover.
+- Calendar format v5, backup ZIP format v1 and existing data compatibility are unchanged.
+
+## 1.1.2 - 2026-10-17
+
+- Prevent Google reconnection from importing a retained local event with a duplicate internal ID. Reconcile unchanged copies within the same recurrence family; preserve changed copies with distinct IDs.
+- Repair existing duplicate active IDs without removing records or changing their content or Google event IDs. Preserve and verify the exact original file as `calendar-data.before-id-repair.<SHA256>.json` first; stop if preservation fails or the source changes.
+- Prioritize the Google account/calendar/event link over old internal-ID hints during post-restore reconciliation, preventing a detached local copy from matching the wrong event.
+- Keep calendar format v5, ZIP format v1, empty-ID and unsafe-archive rejection, deletion history and concurrent shared-folder launches.
+
+## 1.1.1 - 2026-10-17
+
+- Update rustls to 0.23.45 for the TLS 1.3 handshake validation fix used by Google synchronization.
+- Fix ZIP backup/restore validation rejecting legitimate shared IDs between active events and deletion history, including repeated deletions of the same event.
+- Preserve event IDs and every history record; continue rejecting duplicate active IDs, empty IDs and invalid archives.
+- Show manual backup, restore and automatic backup results beside their respective controls and scroll them into view.
+- Keep calendar format v5, ZIP format v1 and compatibility with existing data and 1.1.0 archives.
+
 ## 1.1.0 (2026-10-17)
 
 - Choose a locally accessible calendar data folder in both Store and self-signed portable editions, including folders mounted by Google Drive.

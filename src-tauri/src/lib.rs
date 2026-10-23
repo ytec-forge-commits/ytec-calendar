@@ -23,7 +23,9 @@ mod backup;
 mod credentials;
 #[cfg(test)]
 mod data_safety_tests;
+mod event_ids;
 mod google;
+mod manual;
 mod storage;
 
 const CALENDAR_DATA_VERSION: u32 = 5;
@@ -1014,6 +1016,15 @@ fn write_json_file<T: Serialize>(
     value: &T,
     backup_primary: bool,
 ) -> Result<(), String> {
+    write_json_file_checked(path, value, backup_primary, None)
+}
+
+fn write_json_file_checked<T: Serialize>(
+    path: &Path,
+    value: &T,
+    backup_primary: bool,
+    expected: Option<&[u8]>,
+) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
             .map_err(|error| format!("データフォルダーを作成できません: {error}"))?;
@@ -1055,6 +1066,15 @@ fn write_json_file<T: Serialize>(
         .map_err(|error| format!("一時保存ファイルを確定できません: {error}"))?;
     drop(temp_file);
 
+    if let Some(expected) = expected {
+        if fs::read(path).map_err(|_| "修復元のデータを再確認できません")? != expected
+        {
+            return Err(
+                "DATA_CHANGED: ID修復中に予定が変更されました。元データを保護して停止しました"
+                    .into(),
+            );
+        }
+    }
     let backup = backup_path(path);
     if backup_primary && path.exists() {
         fs::copy(path, &backup)
@@ -1071,11 +1091,18 @@ fn write_json_file<T: Serialize>(
 fn read_json_with_recovery<T: DeserializeOwned + Serialize>(
     path: &Path,
 ) -> Result<Option<T>, String> {
-    let parse = |target: &Path| -> Result<T, String> {
+    Ok(read_json_with_recovery_snapshot(path)?.map(|(value, _)| value))
+}
+
+fn read_json_with_recovery_snapshot<T: DeserializeOwned + Serialize>(
+    path: &Path,
+) -> Result<Option<(T, Vec<u8>)>, String> {
+    let parse = |target: &Path| -> Result<(T, Vec<u8>), String> {
         let content =
             fs::read(target).map_err(|error| format!("保存ファイルを読み込めません: {error}"))?;
-        serde_json::from_slice(&content)
-            .map_err(|error| format!("保存ファイルの形式が正しくありません: {error}"))
+        let value = serde_json::from_slice(&content)
+            .map_err(|error| format!("保存ファイルの形式が正しくありません: {error}"))?;
+        Ok((value, content))
     };
 
     let backup = backup_path(path);
@@ -1097,7 +1124,7 @@ fn read_json_with_recovery<T: DeserializeOwned + Serialize>(
     match parse(path) {
         Ok(value) => Ok(Some(value)),
         Err(primary_error) => {
-            let recovered = parse(&backup)
+            let (recovered, _) = parse(&backup)
                 .or_else(|_| parse(&temp))
                 .map_err(|_| primary_error)?;
             if path.exists() {
@@ -1106,13 +1133,18 @@ fn read_json_with_recovery<T: DeserializeOwned + Serialize>(
             }
             // Keep the valid backup; do not copy the corrupt primary over it.
             write_json_file(path, &recovered, false)?;
-            Ok(Some(recovered))
+            let bytes =
+                serde_json::to_vec_pretty(&recovered).map_err(|_| "復旧データを確認できません")?;
+            Ok(Some((recovered, bytes)))
         }
     }
 }
 
 fn load_app_data_from_path(path: &Path) -> Result<AppData, String> {
-    let mut data: AppData = read_json_with_recovery(path)?.unwrap_or_default();
+    let (mut data, source_bytes): (AppData, _) = match read_json_with_recovery_snapshot(path)? {
+        Some((data, bytes)) => (data, Some(bytes)),
+        None => (AppData::default(), None),
+    };
     let mut should_write = !path.exists();
     if (1..CALENDAR_DATA_VERSION).contains(&data.version) {
         let migration_backup =
@@ -1137,6 +1169,8 @@ fn load_app_data_from_path(path: &Path) -> Result<AppData, String> {
     } else if data.version != CALENDAR_DATA_VERSION {
         return Err(format!("未対応の保存形式です（version: {}）", data.version));
     }
+    let repaired_ids = event_ids::repair_duplicates(&mut data);
+    should_write |= repaired_ids;
     for event in data.events.iter_mut() {
         should_write |= normalize_event_range(event);
         should_write |= normalize_event_reminders(event);
@@ -1149,7 +1183,17 @@ fn load_app_data_from_path(path: &Path) -> Result<AppData, String> {
     should_write |= normalize_ui_scale_percent(&mut data.settings);
     should_write |= normalize_google_default_sync_targets(&mut data.settings.google);
     if should_write {
-        write_json_with_backup(path, &data)?;
+        if repaired_ids {
+            let expected = source_bytes
+                .as_deref()
+                .ok_or("ID修復元のデータを確認できません")?;
+            // This is independent of the rotating save backup/history. Never
+            // modify a legacy duplicate-ID file until its exact bytes are safe.
+            event_ids::preserve_original(path, expected)?;
+            write_json_file_checked(path, &data, true, Some(expected))?;
+        } else {
+            write_json_with_backup(path, &data)?;
+        }
     }
     Ok(data)
 }
@@ -1911,6 +1955,7 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            manual::open_user_manual,
             load_app_data,
             save_app_data,
             get_data_directory,

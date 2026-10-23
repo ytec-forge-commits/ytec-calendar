@@ -567,7 +567,8 @@ def build_story(styles: dict[str, ParagraphStyle]) -> list:
         Spacer(1, 5 * mm),
         p(f'<link href="{OFFICIAL_URL}" color="#5f5278">公式ページ: {OFFICIAL_URL}</link>', styles["link"]),
         p(f'<link href="{SOURCE_URL}" color="#5f5278">ソースコード: {SOURCE_URL}</link>', styles["link"]),
-        url_link("お問い合わせ", "https://ytec.cloudfree.jp/forge/contact/", styles),
+        p(f'<link href="{CONTACT_URL}" color="#5f5278"><b>お問い合わせ</b>: {CONTACT_URL}</link>',
+          ParagraphStyle("CoverContact", parent=styles["body_small"], alignment=TA_CENTER)),
         PageBreak(),
     ])
 
@@ -577,7 +578,7 @@ def build_story(styles: dict[str, ParagraphStyle]) -> list:
         step(1, "配布方法を選ぶ", "Microsoft Storeでは「インストール」を選びます。直接配布版はZIPを右クリックして「すべて展開」し、ZIPの中から直接起動しないでください。", styles),
         step(2, "Koyomadoを起動", "Store版はスタートメニューから起動します。ポータブル版は、展開したkoyomado.exeを起動します。", styles),
         step(3, "ポータブル版だけ置き場所を決める", "USBメモリやGoogle Driveへ持ち運ぶ場合は、自動起動をONにする前にKoyomadoフォルダーを今後使う場所へ移します。", styles),
-        step(4, "位置と起動方法を整える", "画面を好きな位置とサイズに調整します。右上の歯車から、必要な場合だけ「Windows起動時に自動起動」をONにします。", styles),
+        step(4, "位置と起動方法を整える", "画面を好きな位置とサイズに調整します。右上の歯車から、必要な場合だけ「Windows起動時に自動起動」をONにします。「操作説明書を開く」でこのPDFを再表示できます。", styles),
         Spacer(1, 4 * mm),
         card("標準はタスクバーだけに表示", "初期設定では通常のWindowsアプリと同じく、最小化するとタスクバーへ残り、右上の×で終了します。歯車から「タスクトレイのみ」または「両方」へ変更できます。", styles, GREEN_PALE),
         Spacer(1, 4 * mm),
@@ -831,7 +832,7 @@ def build_story(styles: dict[str, ParagraphStyle]) -> list:
         data_table([
             ("Store版の更新", "Microsoft Storeから更新。dataは上記のMSIX LocalStateに残ります。アンインストール前は別の場所へバックアップします"),
             ("ポータブル版の更新", "終了後にdataをバックアップし、新しいZIPへdataをコピー。自動起動は登録し直します"),
-            ("版を切り替える", "1.1.0以降は設定からZIPを保存し、移行先の空フォルダーへ復元。元データとZIPは残ります。後半の移行手順を参照"),
+            ("版を切り替える", "1.1.2以降へ更新し、設定からZIPを保存して、移行先の空フォルダーへ復元。元データとZIPは残ります。後半の移行手順を参照"),
             ("USB / Google Drive", "両版ともWindowsから利用できる保存先を指定可能。同時起動時は全PCの版を揃え、同期完了を確認します"),
         ], styles, 46 * mm),
         Spacer(1, 3 * mm),
@@ -1139,14 +1140,14 @@ def build_story(styles: dict[str, ParagraphStyle]) -> list:
     story.extend([
         step(1, "他PCでの編集を止め、同期完了を確認", "共有フォルダー利用時は、まだ届いていない変更を含められません。切替や移行の前は各PCの同期完了を確認します。", styles),
         step(2, "保存先を指定", "設定の「ZIPバックアップ・復元」で「ZIPの保存先を選択」。予定データのフォルダー外にある、未使用のZIPファイル名を指定します。", styles),
-        step(3, "ZIPを保存する", "「ZIPを保存する」を押し、「ZIPを保存・照合しました」を確認します。同名ファイルは上書きしません。大切なZIPは予定データと別の媒体にも保管してください。", styles),
+        step(3, "ZIPを保存する", "「ZIPを保存する」を押し、ボタン近くの「ZIPを保存・照合しました」を確認します。同名ファイルは上書きしません。大切なZIPは予定データと別の媒体にも保管してください。1.1.2は既存の重複IDを予定を削除せず修復し、修復前JSONも保存先へ退避・照合します。退避は自動削除せず非公開で保管します。", styles),
         Spacer(1, 4 * mm),
         data_table([("含むもの", "現在の予定・削除済み予定・外観設定・通知音・Google予定との紐付け"), ("含まないもの", "OAuthクライアント、トークン、PCごとの保存先・位置・自動設定、過去の履歴"), ("形式と上限", "ZIP形式v1。合計256MB、1ファイル32MB、2048項目まで"), ("暗号化", "暗号化しません。予定・アカウント情報を含むため非公開で管理")], styles, 44 * mm),
         Spacer(1, 4 * mm),
         card("再インストール前に", "Store版のアンインストールではLocalStateが失われる場合があります。ZIPはアプリ専用領域の外へ保存し、読めることを確認してから再インストールしてください。OAuthクライアントJSONの原本は別途保管します。", styles, SAND_PALE),
         PageBreak(),
     ])
-    page_title(story, styles, "RESTORE AND MIGRATE", "ZIP復元・Store版との相互移行", "1.1.0以降の自己署名版→Store版、Store版→自己署名版とも、同じZIP形式で移行できます。公開済み1.0.0にはZIP機能がありません。")
+    page_title(story, styles, "RESTORE AND MIGRATE", "ZIP復元・Store版との相互移行", "移行元・移行先の両方を1.1.2以降へ更新してください。同じIDの削除履歴を含むZIPは旧1.1.0で復元できません。ZIP形式v1は維持しています。")
     story.extend([
         step(1, "移行元でZIPを保存", "元の予定データを残し、移行元での編集を止めます。配布用のアプリZIPではなく、設定から作ったバックアップZIPを使います。", styles),
         step(2, "移行先でZIPと空フォルダーを選ぶ", "「復元するZIPを選択」と「復元先フォルダーを選択」を使い、「ZIPの内容を確認」を押します。現在の予定へ上書きせず、空の専用フォルダーへ復元します。", styles),
