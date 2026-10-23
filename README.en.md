@@ -1,14 +1,18 @@
 # Koyomado
 
+In Settings, choose 「操作説明書を開く」 to open the bundled PDF in Windows' default viewer. No network connection or Google sign-in is required.
+
+**Version 1.1.3 (2026-10-17)** adds this in-app manual button and centers the contact link on the Japanese manual cover.
+
 [日本語](README.md) | English
 
 Koyomado is a simple Windows calendar that can sit on your desktop like a widget. It is distributed as a Microsoft Store app for general use and as a portable folder that can be carried on USB storage or Google Drive.
 
-**Version 1.1.0 (2026-10-17)** adds selectable data folders, ZIP backup/restore, automatic backups and shared-data protection. Store and Vector availability follows their review/update process. These features require version 1.1.0 or later. The application UI is in Japanese; the [English operation manual](docs/Koyomado-Manual.en.pdf) explains the Japanese button labels. A [Japanese manual](docs/Koyomado操作説明書.pdf), [English changelog](CHANGELOG.en.md) and [English privacy policy](PRIVACY.en.md) are also available.
+**Version 1.1.2 (2026-10-17)** fixes duplicate active IDs after reconnecting Google and the resulting ZIP backup failure. Existing duplicates receive distinct internal IDs without deleting events, with the original file preserved first. Selectable folders, ZIP backup/restore, automatic backups and shared-data protection were introduced in 1.1.0. Store and Vector availability follows their review/update process. The application UI is in Japanese; the [English operation manual](docs/Koyomado-Manual.en.pdf) explains the Japanese button labels. A [Japanese manual](docs/Koyomado操作説明書.pdf), [English changelog](CHANGELOG.en.md) and [English privacy policy](PRIVACY.en.md) are also available.
 
 - Official website: https://ytec.cloudfree.jp/forge/en/projects/koyomado/
 - Microsoft Store (recommended): https://apps.microsoft.com/detail/9P6WFRBWG8X5
-- Portable edition: https://github.com/ytec-forge-commits/ytec-calendar/releases/tag/v1.1.0
+- Portable edition: https://github.com/ytec-forge-commits/ytec-calendar/releases/tag/v1.1.3
 - Supported operating systems: Windows 10 / 11 (64-bit)
 - License: Apache License 2.0
 
@@ -38,7 +42,7 @@ Koyomado does not include printing, PDF export, advertising, analytics, or a pro
 
 ## Getting started
 
-1. For everyday use, install the [Microsoft Store edition](https://apps.microsoft.com/detail/9P6WFRBWG8X5). When portability is needed, extract the [portable edition](https://github.com/ytec-forge-commits/ytec-calendar/releases/tag/v1.1.0) ZIP where you intend to keep it.
+1. For everyday use, install the [Microsoft Store edition](https://apps.microsoft.com/detail/9P6WFRBWG8X5). When portability is needed, extract the [portable edition](https://github.com/ytec-forge-commits/ytec-calendar/releases/tag/v1.1.3) ZIP where you intend to keep it.
 2. Launch the Store edition from the Start menu, or run `koyomado.exe` for the portable edition.
 3. Open the gear menu in the upper-right corner and configure the display mode and Windows startup behavior.
 4. Move and resize the window as desired. Koyomado will restore that placement the next time it starts with the same monitor configuration.
@@ -145,7 +149,9 @@ Google integration is disabled after restore. Reimport the OAuth client and reau
 
 #### Move between the self-signed and Store editions
 
-Both editions must support ZIP backups (1.1.0 or later). In either direction, stop editing the source, export a backup from Settings, then restore it in the destination edition into a dedicated empty folder. **The application distribution ZIP is not a calendar backup.** Retain both the source and the backup until events, multi-day durations, recurrence and custom sounds are verified. Reconfigure Google authorization and automatic backups on the destination. Before uninstalling the Store edition, save the ZIP outside its LocalState. For old 1.0.0 data, preserve it before updating, or select its existing data folder using the location feature above.
+Update both editions to 1.1.2 or later before migrating. In either direction, stop editing the source, export a backup from Settings, then restore it in the destination edition into a dedicated empty folder. **The application distribution ZIP is not a calendar backup.** Retain both the source and the backup until events, multi-day durations, recurrence and custom sounds are verified. Reconfigure Google authorization and automatic backups on the destination. Before uninstalling the Store edition, save the ZIP outside its LocalState. For old 1.0.0 data, preserve it before updating, or select its existing data folder using the location feature above.
+
+Version 1.1.2 repairs existing duplicate active IDs when loading, assigning distinct internal IDs to later records without deleting or merging events. Google event IDs, content and update timestamps remain unchanged. The exact original file is preserved and verified as `calendar-data.before-id-repair.<SHA256>.json` in the same data folder, with another source check immediately before saving. Repair stops if preservation fails. This original copy is not automatically deleted or included in normal ZIP exports; keep it private because it contains the original settings and personal data. Identical-looking local copies are retained.
 
 Automatic backup settings are PC-local: select a separate folder, daily/weekly (Monday boundary)/monthly (first-day boundary), and 1–100 retained generations (default 10). While running, the app checks approximately every 60 seconds, once per period; a missed period creates one backup at next launch. Only after a new ZIP is successfully written, reread and verified are older unchanged files recorded for this automatic series removed. Manual ZIPs and other series are excluded. Old folders, files that could not be safely pruned and unregistered ZIPs from an interrupted run may remain; check the error status. Calendar history JSON files are outside this retention policy.
 
@@ -185,7 +191,7 @@ MSIX packaging uses MakeAppx from the Windows SDK. Use the exact Package Identit
 
 ```powershell
 npm run tauri:build
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-msix.ps1 -SkipBuild -PackageVersion 1.1.0.0 -CreateUpload
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-msix.ps1 -SkipBuild -PackageVersion 1.1.3.0 -CreateUpload
 npm run test:store-submission
 ```
 
