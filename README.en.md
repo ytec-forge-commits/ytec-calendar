@@ -103,7 +103,7 @@ Both editions can select a Google Drive or other locally accessible sync folder 
 3. For an empty folder, copy current data. Events, backups, history and custom sounds are copied and verified before the location changes. The source remains intact.
 4. For an existing calendar, explicitly use its data. The two calendars are not merged and neither is overwritten.
 
-No app restart is required. Idle windows notice a location change, including when event contents are identical. An open editor keeps its input and refuses to save old-location changes into the new folder. An unavailable folder never silently falls back to the default or initializes empty data. The error screen can select another existing calendar.
+No app restart is required. Idle windows notice a location change, including when event contents are identical. An open editor keeps its input and refuses to save old-location changes into the new folder. An unavailable folder never silently falls back to the default or initializes empty data. If startup loading fails, the app retries automatically up to three times at ten-second intervals. You can also retry manually or select another existing calendar on the error screen.
 
 Window positions stay in the original default folder. Location selection is PC-local: Store uses `LocalState/Koyomado/storage-location.json`; portable uses installation-specific files under `%LOCALAPPDATA%/Koyomado/storage-locations/`. Select the shared folder separately on each PC. Google refresh tokens remain in that PC's Windows Credential Manager. To return, specify the default folder and review its existing data before confirming.
 

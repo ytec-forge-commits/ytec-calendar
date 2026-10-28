@@ -723,3 +723,5 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .backup-settings h4 { margin: 20px 0 10px; }
 .backup-settings button { white-space: normal; }
 .backup-status { overflow-wrap: anywhere; }
+
+.startup-recovery-options { border: 0; margin: 0; padding: 0; min-width: 0; }

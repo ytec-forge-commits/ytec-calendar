@@ -33,3 +33,10 @@ This record does not change existing licenses or grant general trademark rights.
 - Events are examples. The current-storage path was replaced in the screenshot fixture's display with a clearly labeled example, `G:\マイドライブ\Koyomado\data`; it is not this computer's actual path. No backup or storage operation used that display-only example.
 - Public images were checked for machine-specific paths, user names, real events and credentials. They contain none. New images use the same existing app UI, font and logo; no new third-party decorative assets were introduced.
 - File identities are included in `docs/asset-manifest.json`. The Japanese UI is retained in English listings with English captions.
+
+
+## Version 1.1.4 Startup Recovery Screenshots (2026-10-29)
+
+- `docs/manual-assets/startup-retry-wait-114.png` and `startup-retry-stopped-114.png` are cropped from the 2026-10-28 tutorial captures of the actual application UI in an isolated browser fixture. File operations were simulated; native file I/O and external network access were disabled. They are explanatory UI captures, not a Windows native integration test.
+- The fixture simulates an unavailable drive, then a restored connection. No actual calendar data or OAuth credentials were used. Only the error heading, Reload button and retry status are included; file path fields are excluded.
+- Existing Koyomado UI, logo and LINE Seed JP only. No new third-party art or rights changes. Source paths, crop rectangles and hashes are in the local manual-review record; final asset hashes are in `docs/asset-manifest.json`.
