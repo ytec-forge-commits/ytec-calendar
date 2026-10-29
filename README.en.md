@@ -2,17 +2,17 @@
 
 In Settings, choose 「操作説明書を開く」 to open the bundled PDF in Windows' default viewer. No network connection or Google sign-in is required.
 
-**Version 1.1.3 (2026-10-17)** adds this in-app manual button and centers the contact link on the Japanese manual cover.
-
 [日本語](README.md) | English
 
 Koyomado is a simple Windows calendar that can sit on your desktop like a widget. It is distributed as a Microsoft Store app for general use and as a portable folder that can be carried on USB storage or Google Drive.
 
-**Version 1.1.2 (2026-10-17)** fixes duplicate active IDs after reconnecting Google and the resulting ZIP backup failure. Existing duplicates receive distinct internal IDs without deleting events, with the original file preserved first. Selectable folders, ZIP backup/restore, automatic backups and shared-data protection were introduced in 1.1.0. Store and Vector availability follows their review/update process. The application UI is in Japanese; the [English operation manual](docs/Koyomado-Manual.en.pdf) explains the Japanese button labels. A [Japanese manual](docs/Koyomado操作説明書.pdf), [English changelog](CHANGELOG.en.md) and [English privacy policy](PRIVACY.en.md) are also available.
+The current public release is **1.1.4** (checked October 29, 2026). If a data folder such as Google Drive is unavailable at startup, Koyomado retries at 10-second intervals up to three times, then allows manual reload. It does not replace unavailable data with an empty calendar, and automatic retries pause during data-folder operations. Calendar format v5 and backup ZIP format v1 are unchanged.
+
+Microsoft Store and the Forge portable edition 1.1.4 are available, with updated Japanese and English PDF manuals. Version 1.1.4 has been submitted to Vector and is awaiting publication. The application UI is Japanese. The [English PDF manual](https://ytec.cloudfree.jp/forge/downloads/koyomado/koyomado-1.1.4-en.pdf) explains its labels; a [Japanese PDF manual](https://ytec.cloudfree.jp/forge/downloads/koyomado/koyomado-1.1.4-ja.pdf), [English changelog](CHANGELOG.en.md), and [privacy policy](PRIVACY.en.md) are also available.
 
 - Official website: https://ytec.cloudfree.jp/forge/en/projects/koyomado/
 - Microsoft Store (recommended): https://apps.microsoft.com/detail/9P6WFRBWG8X5
-- Portable edition: https://github.com/ytec-forge-commits/ytec-calendar/releases/tag/v1.1.3
+- Portable edition: https://ytec.cloudfree.jp/forge/downloads/koyomado/koyomado-v1.1.4-windows-portable.zip
 - Supported operating systems: Windows 10 / 11 (64-bit)
 - License: Apache License 2.0
 
@@ -42,7 +42,7 @@ Koyomado does not include printing, PDF export, advertising, analytics, or a pro
 
 ## Getting started
 
-1. For everyday use, install the [Microsoft Store edition](https://apps.microsoft.com/detail/9P6WFRBWG8X5). When portability is needed, extract the [portable edition](https://github.com/ytec-forge-commits/ytec-calendar/releases/tag/v1.1.3) ZIP where you intend to keep it.
+1. For everyday use, install the [Microsoft Store edition](https://apps.microsoft.com/detail/9P6WFRBWG8X5). When portability is needed, extract the [portable edition](https://ytec.cloudfree.jp/forge/downloads/koyomado/koyomado-v1.1.4-windows-portable.zip) ZIP where you intend to keep it.
 2. Launch the Store edition from the Start menu, or run `koyomado.exe` for the portable edition.
 3. Open the gear menu in the upper-right corner and configure the display mode and Windows startup behavior.
 4. Move and resize the window as desired. Koyomado will restore that placement the next time it starts with the same monitor configuration.
@@ -191,7 +191,7 @@ MSIX packaging uses MakeAppx from the Windows SDK. Use the exact Package Identit
 
 ```powershell
 npm run tauri:build
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-msix.ps1 -SkipBuild -PackageVersion 1.1.3.0 -CreateUpload
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-msix.ps1 -SkipBuild -PackageVersion 1.1.4.0 -CreateUpload
 npm run test:store-submission
 ```
 
