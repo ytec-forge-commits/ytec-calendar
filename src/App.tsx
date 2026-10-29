@@ -60,6 +60,7 @@ import { StorageSettings } from "./StorageSettings";
 import { BackupSettings } from "./BackupSettings";
 import { ManualHelp } from "./ManualHelp";
 import { runDueBackup } from "./lib/store";
+import { createStartupLoader } from "./lib/startupLoader";
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 const EVENT_COLORS = ["#78a88f", "#83a9c2", "#b49ac7", "#d2a36f", "#d7867f", "#92a86c"];
@@ -106,6 +107,9 @@ function App() {
   const [dragState, setDragState] = useState<CalendarDragState | null>(null);
   const [toast, setToast] = useState("");
   const [loadError, setLoadError] = useState("");
+  const [startupLoading, setStartupLoading] = useState(true);
+  const [startupRetries, setStartupRetries] = useState(3);
+  const startupLoaderRef = useRef<ReturnType<typeof createStartupLoader<AppData>> | null>(null);
   const [saveError, setSaveError] = useState("");
   const [storageBusy, setStorageBusy] = useState(false);
   const [syncBusy, setSyncBusy] = useState(false);
@@ -119,10 +123,19 @@ function App() {
   const notificationPlaybackRef = useRef<NotificationPlayback | null>(null);
 
   useEffect(() => {
-    loadAppData().then(setData).catch((error: unknown) => setLoadError(String(error)));
+    const loader = createStartupLoader(loadAppData, {
+      onLoading: () => setStartupLoading(true),
+      onError: (error, remaining) => { setLoadError(String(error)); setStartupRetries(remaining); setStartupLoading(false); },
+      onSuccess: (loaded) => { setData(loaded); setLoadError(""); setStartupLoading(false); },
+    });
+    startupLoaderRef.current = loader;
+    loader.start();
+    return () => { loader.dispose(); if (startupLoaderRef.current === loader) startupLoaderRef.current = null; };
   }, []);
 
+  const startupReady = data !== null;
   useEffect(() => {
+    if (!startupReady) return;
     let running = false; let disposed = false;
     const check = async () => {
       if (running || storageBusyRef.current || syncBusyRef.current || saveBusyRef.current) return;
@@ -134,7 +147,7 @@ function App() {
     void check();
     const timer = window.setInterval(() => void check(), 60_000);
     return () => { disposed = true; window.clearInterval(timer); };
-  }, []);
+  }, [startupReady]);
 
   useEffect(() => {
     dataRef.current = data;
@@ -773,8 +786,9 @@ function App() {
     }, "設定を保存しました");
   };
 
-  const handleStorageBusy = (busy: boolean) => { storageBusyRef.current = busy; setStorageBusy(busy); };
+  const handleStorageBusy = (busy: boolean) => { storageBusyRef.current = busy; startupLoaderRef.current?.setPaused(busy); setStorageBusy(busy); };
   const handleStorageChanged = (next: AppData) => {
+    startupLoaderRef.current?.dispose();
     dataRef.current = next;
     setData(next); setLoadError(""); setSaveError(""); setSettingsOpen(false); setUiScalePreview(null);
     setToast("予定データの保存先を切り替えました。元のデータは残しています");
@@ -785,10 +799,14 @@ function App() {
       <main className="fatal-state">
         <p className="eyebrow">koyomado</p>
         <h1>カレンダーを開けませんでした</h1>
-        <p>{loadError}</p>
+        <p role="alert">{loadError}</p>
         <p>保存先の接続・同期状態と読み書き権限を確認するか、下で別の既存データを選択してください。</p>
-        <StorageSettings onChanged={handleStorageChanged} onBusyChange={handleStorageBusy} />
-        <BackupSettings onChanged={handleStorageChanged} onBusyChange={handleStorageBusy} />
+        <button type="button" className="primary-button" disabled={startupLoading || storageBusy} onClick={() => startupLoaderRef.current?.retry()}>再読み込み</button>
+        <p role="status">{startupLoading ? "読み込みを確認しています…" : storageBusy ? "保存先の操作が終わるまで自動再読み込みを待機しています。" : startupRetries > 0 ? `10秒後に自動で再読み込みします（残り${startupRetries}回）。` : "自動再読み込みを終了しました。接続を確認して再読み込みしてください。"}</p>
+        <fieldset className="startup-recovery-options" disabled={startupLoading}>
+          <StorageSettings onChanged={handleStorageChanged} onBusyChange={handleStorageBusy} />
+          <BackupSettings onChanged={handleStorageChanged} onBusyChange={handleStorageBusy} />
+        </fieldset>
       </main>
     );
   }

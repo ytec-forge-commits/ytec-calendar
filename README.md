@@ -6,11 +6,13 @@
 
 Koyomadoは、Windowsのデスクトップへウィジェットのように置いて使える、シンプルなカレンダーです。一般利用向けのMicrosoft Store版と、USBメモリやGoogle Driveへフォルダーごと持ち運べるポータブル版を用意します。
 
-**1.1.3（2026-10-17）**。Google再接続で現在の予定IDが重複し、ZIP保存できなくなる問題を修正します。既存の重複は予定を削除せず内部IDを修復し、修復前のファイルも保全します。保存先指定、ZIPバックアップ／復元、自動バックアップ、共有データ保護は1.1.0から利用できます。Store・Vectorは審査・更新完了後の配信になります。アプリUIは日本語です。[日本語操作説明書](docs/Koyomado操作説明書.pdf)と[英語操作説明書](docs/Koyomado-Manual.en.pdf)を用意しています。
+最新の公開版は **1.1.4** です（2026年10月29日確認）。起動時にGoogle Driveなどの保存先へ接続できない場合、10秒間隔で最大3回自動で再読み込みし、その後も手動で再試行できます。接続できない状態で空の予定を作って上書きせず、保存先の切替中は自動試行を待機します。予定形式v5・ZIP形式v1は変えていません。
+
+Microsoft Store版とForgeのポータブル版1.1.4、更新済みの日英PDFマニュアルを公開しています。Vectorは1.1.4への更新を申請済みで、公開待ちです。アプリUIは日本語です。[日本語PDFマニュアル](https://ytec.cloudfree.jp/forge/downloads/koyomado/koyomado-1.1.4-ja.pdf)・[英語PDFマニュアル](https://ytec.cloudfree.jp/forge/downloads/koyomado/koyomado-1.1.4-en.pdf)を利用できます。
 
 - 公式ページ: https://ytec.cloudfree.jp/forge/projects/koyomado/
 - Microsoft Store（推奨）: https://apps.microsoft.com/detail/9P6WFRBWG8X5
-- ポータブル版: https://github.com/ytec-forge-commits/ytec-calendar/releases/tag/v1.1.3
+- ポータブル版: https://ytec.cloudfree.jp/forge/downloads/koyomado/koyomado-v1.1.4-windows-portable.zip
 - 対応OS: Windows 10 / 11（64bit）
 - ライセンス: Apache License 2.0
 
@@ -40,7 +42,7 @@ Koyomadoは、Windowsのデスクトップへウィジェットのように置�
 
 ## 初回の使い方
 
-1. 普段使いには[Microsoft Store版](https://apps.microsoft.com/detail/9P6WFRBWG8X5)をインストールします。持ち運んで使う場合は、[ポータブル版](https://github.com/ytec-forge-commits/ytec-calendar/releases/tag/v1.1.3)のZIPを今後使う場所へ展開します。
+1. 普段使いには[Microsoft Store版](https://apps.microsoft.com/detail/9P6WFRBWG8X5)をインストールします。持ち運んで使う場合は、[ポータブル版](https://ytec.cloudfree.jp/forge/downloads/koyomado/koyomado-v1.1.4-windows-portable.zip)のZIPを今後使う場所へ展開します。
 2. Store版はスタートメニュー、ポータブル版は`koyomado.exe`から起動します。
 3. 右上の歯車から、表示方法とWindows自動起動を好みに合わせて設定します。
 4. ウィンドウを好きな位置とサイズへ調整します。同じモニター構成では、次回からその位置で開きます。
@@ -101,7 +103,7 @@ Store版・ポータブル版とも、設定の「予定データの保存先」
 3. 空フォルダーには「現在のデータをコピーして切り替える」を使います。予定・バックアップ・履歴・ユーザー通知音をコピーして照合し、成功した後だけ保存先を切り替えます。元のデータは残ります。
 4. 予定があるフォルダーには「選択先の既存データを使う」を使います。選択先の予定へ切り替わり、現在の予定との自動統合や上書きはしません。
 
-切替後のアプリ再起動は不要です。別ウィンドウが切り替えた場合も、操作していなければ自動で取り込みます。編集中は入力を保持し、旧保存先の入力を新しい保存先へ保存することを止めます。保存先を利用できない場合は、空の予定を作ったり標準へ自動で戻したりしません。エラー画面から別の既存データのフォルダーを選び直せます。
+切替後のアプリ再起動は不要です。別ウィンドウが切り替えた場合も、操作していなければ自動で取り込みます。編集中は入力を保持し、旧保存先の入力を新しい保存先へ保存することを止めます。保存先を利用できない場合は、空の予定を作ったり標準へ自動で戻したりしません。起動時に読み込めなかった場合は、10秒間隔で最大3回自動再試行します。接続後はエラー画面の「再読み込み」も使えます。エラー画面から別の既存データのフォルダーを選び直せます。
 
 ウィンドウ位置は従来の標準保存先に残し、フォルダー指定もPCごとに保存します。Store版では`LocalState/Koyomado/storage-location.json`、ポータブル版では`%LOCALAPPDATA%/Koyomado/storage-locations/`内に保持します。別PCではそのPCで同じデータフォルダーを指定してください。Googleの更新トークンはWindows資格情報マネージャーに残り、移行・共有しません。標準へ戻す場合は「標準の保存先を指定」で改めて件数を確認して切り替えます。
 
@@ -189,7 +191,7 @@ Windows SDKのMakeAppxを使用します。Partner Centerで割り当てられ�
 
 ```powershell
 npm run tauri:build
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-msix.ps1 -SkipBuild -PackageVersion 1.1.3.0 -CreateUpload
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-msix.ps1 -SkipBuild -PackageVersion 1.1.4.0 -CreateUpload
 npm run test:store-submission
 ```
 

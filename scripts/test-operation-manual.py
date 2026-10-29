@@ -25,6 +25,13 @@ class ManualContract(unittest.TestCase):
             self.assertIn(official, links)
             for index, page in enumerate(reader.pages[1:], 2):
                 self.assertIn(f"{index} / {len(reader.pages)}", page.extract_text())
+            recovery = reader.pages[-1]
+            text = recovery.extract_text()
+            self.assertIn("1.1.4", text)
+            self.assertIn("再読み込み", text)
+            self.assertIn("10秒間隔" if language == "ja" else "10-second intervals", text)
+            self.assertIn("最大3回" if language == "ja" else "up to three times", text)
+            self.assertGreaterEqual(len(recovery.images), 2, "Both retry states need screenshots")
 
     def test_japanese_manual_has_working_contact_link(self):
         self.check_manual("ja")

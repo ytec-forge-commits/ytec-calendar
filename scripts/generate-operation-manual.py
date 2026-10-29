@@ -30,7 +30,7 @@ from reportlab.platypus import (
 ROOT = Path(__file__).resolve().parents[1]
 ASSET_DIR = ROOT / "docs" / "manual-assets"
 VERSION = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))["version"]
-RELEASE_DATE = "2026年10月17日"
+RELEASE_DATE = "2026年10月29日（説明書更新）"
 OFFICIAL_URL = "https://ytec.cloudfree.jp/forge/projects/koyomado/"
 SOURCE_URL = "https://github.com/ytec-forge-commits/ytec-calendar"
 CONTACT_URL = "https://ytec.cloudfree.jp/forge/contact/"
@@ -44,7 +44,7 @@ GOOGLE_CREDENTIALS_URL = "https://developers.google.com/workspace/guides/create-
 GOOGLE_USER_DATA_URL = "https://developers.google.com/terms/api-services-user-data-policy"
 GOOGLE_AUDIENCE_HELP_URL = "https://support.google.com/cloud/answer/15549945?hl=ja"
 GOOGLE_VERIFICATION_HELP_URL = "https://support.google.com/cloud/answer/13464323?hl=ja"
-TOTAL_PAGES = 31
+TOTAL_PAGES = 32
 
 PAGE_W, PAGE_H = A4
 MARGIN_X = 17 * mm
@@ -1170,6 +1170,17 @@ def build_story(styles: dict[str, ParagraphStyle]) -> list:
         card("容量とバックアップ先", "ZIPの世代数はcalendar-historyのJSON履歴には適用しません。履歴や手動ZIP、旧保存先のZIPは増える場合があります。残容量とエラーを定期的に確認してください。別フォルダーだけではディスク故障への備えにならないため、重要なZIPは別媒体にも保管します。", styles, ROSE_PALE),
         Spacer(1, 3 * mm),
         card("同期サービスについて", "Drive等のクライアントによるファイル同期はGoogleカレンダー連携のON/OFFとは別です。共有範囲を確認し、共有先に機密の予定やOAuth設定を置かないでください。", styles, SKY_PALE),
+    ])
+    story.append(PageBreak())
+    page_title(story, styles, "STARTUP RECOVERY · 1.1.4", "起動時に保存先へ接続できないとき", "Google Driveやネットワークドライブの準備より先にKoyomadoが起動しても、アプリを終了せず読み込みをやり直せます。")
+    story.extend([
+        screenshot_figure("startup-retry-wait-114.png", "自動再読み込みの待機中。残り回数を表示します（合成データの説明用画面）。", styles, 160 * mm),
+        step(1, "接続・同期・権限を確認", "「カレンダーを開けませんでした」が出たら、Google Driveなどの起動・サインイン・同期完了と、保存先の読み書き権限を確認します。", styles),
+        step(2, "自動再読み込みを待つ", "初回の読み込み失敗後、10秒間隔で最大3回、自動で再試行します。読み込みに成功すると通常のカレンダーへ戻ります。", styles),
+        screenshot_figure("startup-retry-stopped-114.png", "自動再読み込み終了後も、接続を確認して「再読み込み」を押せます。", styles, 160 * mm),
+        step(3, "手動で「再読み込み」", "自動再試行が終わっていても、接続が戻ったら「再読み込み」を押します。再起動は不要です。通常画面へ戻ったら、予定と保存先を確認してから編集します。", styles),
+        step(4, "別の既存データを使う場合", "同じ画面の保存先指定、またはZIP復元から明示的に切り替えられます。保存先の確認・切替・復元の操作中は自動再読み込みを待機し、処理が重ならないようにします。", styles),
+        card("元の予定データを守ります", "接続できないだけで空の予定を作ったり、標準保存先へ自動で戻したりしません。自動再試行の終了はデータの削除を意味しません。破損や権限の問題は再読み込みだけで直るとは限らないため、元のフォルダーを残して原因を確認してください。保存形式v5・ZIP形式v1は変更していません。", styles, GREEN_PALE),
     ])
     return story
 

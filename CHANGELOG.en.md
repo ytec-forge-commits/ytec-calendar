@@ -1,5 +1,12 @@
 # Koyomado changelog
 
+## 1.1.4 - 2026-10-29
+
+- Retry unavailable startup data storage every 10 seconds, up to three automatic retries.
+- Add a manual Reload button after checking the storage connection.
+- Pause retries during storage changes and never replace existing data with an empty calendar.
+- Keep calendar format v5 and backup ZIP format v1.
+
 ## 1.1.3 - 2026-10-17
 
 - Open the bundled PDF user guide from Settings using Windows' default viewer, without a network connection or Google sign-in.

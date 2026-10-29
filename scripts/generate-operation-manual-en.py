@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import importlib.util
 from pathlib import Path
 
@@ -14,7 +15,7 @@ spec.loader.exec_module(manual)
 
 OFFICIAL = "https://ytec.cloudfree.jp/forge/en/projects/koyomado/"
 STORE = "https://apps.microsoft.com/detail/9P6WFRBWG8X5"
-TOTAL_PAGES = 31
+TOTAL_PAGES = 32
 
 # The Japanese labels match the shipped interface; screenshots are not an English UI.
 PAGES = [
@@ -192,6 +193,14 @@ PAGES.extend([
     ], [], []),
 ])
 
+PAGES.append(("STARTUP RECOVERY · 1.1.4", "Reconnect a startup data folder", "If Google Drive or a network drive is not ready when Koyomado starts, you can retry without restarting the app.", [
+    ("Check the connection", "When 「カレンダーを開けませんでした」 appears, check that the drive client is running and signed in, synchronization has finished, and the folder is readable and writable."),
+    ("Automatic retries", "After the initial load fails, Koyomado retries at 10-second intervals, up to three times. The message shows the remaining attempts. A successful load returns to the calendar."),
+    ("Manual reload", "After automatic retries end, restore the connection and choose 「再読み込み」 (Reload). No app restart is required. Verify the events and selected folder before editing."),
+    ("Switching and data protection", "You may explicitly choose another existing data folder or restore a backup ZIP on the same screen. Automatic retries pause while folder checks, switching or restoration are in progress. An unavailable folder does not cause an empty calendar or an automatic fallback to the default folder. Retain the source if corruption or permissions need investigation. Calendar format v5 and ZIP format v1 are unchanged."),
+], [("startup-retry-wait-114.png", "Automatic retry: the message shows a 10-second wait and three remaining attempts. Synthetic example, Japanese interface.", 150), ("startup-retry-stopped-114.png", "Automatic retries have ended; 「再読み込み」 remains available after reconnection.", 150)], []))
+
+
 def decorate_page(canvas, doc):
     if doc.page <= 1:
         return
@@ -215,13 +224,21 @@ def generate(output):
     logo = Image(str(manual.ROOT / "src/assets/koyomado-logo.png"), 22 * mm, 22 * mm)
     logo.hAlign = "CENTER"
     story = [logo, Spacer(1, 4 * mm), manual.p("Koyomado", styles["cover_title"]),
-             manual.p(f"User Guide v{manual.VERSION}<br/>Updated October 17, 2026", styles["cover_subtitle"]),
+             manual.p(f"User Guide v{manual.VERSION}<br/>Manual updated October 29, 2026", styles["cover_subtitle"]),
              manual.screenshot("calendar-v1.png", 145 * mm), Spacer(1, 5 * mm),
              manual.p("Windows 10/11 x64. The application interface is Japanese; this guide explains its controls in English. Store and portable editions have separate data locations. Google integration is optional and initially off.", styles["body"]),
              manual.url_link("Public product page", OFFICIAL, styles), manual.url_link("Source", manual.SOURCE_URL, styles),
              manual.url_link("Contact", manual.CONTACT_URL, styles),
              manual.p("Version 1.1.2 fixes duplicate active IDs after Google reconnection and the resulting ZIP backup failure. It preserves original files before repairing internal IDs without deleting events. Version 1.1.0 introduced selectable folders, ZIP backup/restore, automatic backups and shared-data protection. Calendar format v5 and ZIP format v1 remain unchanged. Update both editions to 1.1.2 before migration.", styles["muted"]), PageBreak()]
     for index, (kicker, title, lead, sections, images, links) in enumerate(PAGES):
+        if kicker == "STARTUP RECOVERY · 1.1.4":
+            styles = copy.deepcopy(styles)
+            styles["body"].fontSize = 8.3
+            styles["body"].leading = 12
+            styles["h2"].fontSize = 11.5
+            styles["h2"].leading = 15
+            styles["h2"].spaceBefore = 2 * mm
+            styles["h2"].spaceAfter = 1 * mm
         manual.page_title(story, styles, kicker, title, lead)
         for heading, body in sections:
             story.extend([manual.p(heading, styles["h2"]), manual.p(body, styles["body"])])
