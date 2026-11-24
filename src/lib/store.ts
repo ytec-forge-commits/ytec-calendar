@@ -116,7 +116,10 @@ function normalizeEvent(value: unknown): CalendarEvent {
     ...(event as CalendarEvent),
     date,
     endDate,
-    annual: recurrence?.kind === "simple" && recurrence.frequency === "yearly",
+    // Google imports already set this flag. Keep the value used by the native save check.
+    annual: recurrence?.kind === "google"
+      ? event.annual ?? false
+      : recurrence?.kind === "simple" && recurrence.frequency === "yearly",
     recurrence,
     recurrenceException: event.recurrenceException ?? null,
     reminders: {

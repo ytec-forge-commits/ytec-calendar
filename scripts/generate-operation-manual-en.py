@@ -224,7 +224,7 @@ def generate(output):
     logo = Image(str(manual.ROOT / "src/assets/koyomado-logo.png"), 22 * mm, 22 * mm)
     logo.hAlign = "CENTER"
     story = [logo, Spacer(1, 4 * mm), manual.p("Koyomado", styles["cover_title"]),
-             manual.p(f"User Guide v{manual.VERSION}<br/>Manual updated October 29, 2026", styles["cover_subtitle"]),
+             manual.p(f"User Guide v{manual.VERSION}<br/>Manual updated November 25, 2026", styles["cover_subtitle"]),
              manual.screenshot("calendar-v1.png", 145 * mm), Spacer(1, 5 * mm),
              manual.p("Windows 10/11 x64. The application interface is Japanese; this guide explains its controls in English. Store and portable editions have separate data locations. Google integration is optional and initially off.", styles["body"]),
              manual.url_link("Public product page", OFFICIAL, styles), manual.url_link("Source", manual.SOURCE_URL, styles),

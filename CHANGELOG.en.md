@@ -1,6 +1,12 @@
 # Koyomado changelog
 
-## 1.1.4 - 2026-10-29
+## 1.1.5 - 2026-11-25
+
+- Fix a false save conflict that could prevent saving a theme or event when the calendar contains a yearly recurring event imported from Google Calendar.
+- Preserve recurrence rules, Google links, deletion history, concurrent-edit protection, calendar format v5 and backup ZIP format v1.
+- Update ZIP backup and Google Calendar TLS dependencies to patched versions (zip 9.0.5 and rustls 0.23.46).
+
+## 1.1.4 - Unreleased
 
 - Retry unavailable startup data storage every 10 seconds, up to three automatic retries.
 - Add a manual Reload button after checking the storage connection.

@@ -16,7 +16,7 @@ Koyomadoは、次のオープンソースソフトウェアとフォントを利
 - url — MIT OR Apache-2.0 License
 - windows-sys — MIT OR Apache-2.0 License
 - windows — MIT OR Apache-2.0 License
-- zip 9.0.4 — MIT License, https://github.com/zip-rs/zip2 (ZIPバックアップ読書き、未改変、実行時に静的リンク)
+- zip 9.0.5 — MIT License, https://github.com/zip-rs/zip2 (ZIPバックアップ読書き、未改変、実行時に静的リンク)
 - typed-path 0.12.3 — MIT OR Apache-2.0 License, https://github.com/chipsenkbeil/typed-path (zipの依存、MITを選択、未改変)
 - flate2 1.1.9 — MIT OR Apache-2.0 License, https://github.com/rust-lang/flate2-rs (既存依存をZIP圧縮にも利用、MITを選択、未改変)
 - sha2 0.10.9 — MIT OR Apache-2.0 License, https://github.com/RustCrypto/hashes (既存依存をZIPのSHA-256照合にも利用、MITを選択、未改変)
@@ -135,7 +135,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
 
-### zip-9.0.4-LICENSE.txt
+### zip-9.0.5-LICENSE.txt
 
 The MIT License (MIT)
 

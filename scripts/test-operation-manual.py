@@ -1,4 +1,5 @@
 """Exercise generated manual links and page numbering, not source strings."""
+import json
 import subprocess
 import sys
 import tempfile
@@ -25,6 +26,8 @@ class ManualContract(unittest.TestCase):
             self.assertIn(official, links)
             for index, page in enumerate(reader.pages[1:], 2):
                 self.assertIn(f"{index} / {len(reader.pages)}", page.extract_text())
+            version = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))["version"]
+            self.assertIn(version, reader.pages[0].extract_text())
             recovery = reader.pages[-1]
             text = recovery.extract_text()
             self.assertIn("1.1.4", text)
