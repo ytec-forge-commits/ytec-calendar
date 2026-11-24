@@ -6,13 +6,13 @@
 
 Koyomadoは、Windowsのデスクトップへウィジェットのように置いて使える、シンプルなカレンダーです。一般利用向けのMicrosoft Store版と、USBメモリやGoogle Driveへフォルダーごと持ち運べるポータブル版を用意します。
 
-最新の公開版は **1.1.4** です（2026年10月29日確認）。起動時にGoogle Driveなどの保存先へ接続できない場合、10秒間隔で最大3回自動で再読み込みし、その後も手動で再試行できます。接続できない状態で空の予定を作って上書きせず、保存先の切替中は自動試行を待機します。予定形式v5・ZIP形式v1は変えていません。
+**1.1.5**では、Googleカレンダーから取り込んだ年次の繰り返し予定があると、背景色や予定を保存できない場合がある問題を修正しました。既存の予定データ、同時編集時の上書き保護、予定形式v5・ZIP形式v1を維持しています。
 
-Microsoft Store版とForgeのポータブル版1.1.4、更新済みの日英PDFマニュアルを公開しています。Vectorは1.1.4への更新を申請済みで、公開待ちです。アプリUIは日本語です。[日本語PDFマニュアル](https://ytec.cloudfree.jp/forge/downloads/koyomado/koyomado-1.1.4-ja.pdf)・[英語PDFマニュアル](https://ytec.cloudfree.jp/forge/downloads/koyomado/koyomado-1.1.4-en.pdf)を利用できます。
+アプリUIは日本語です。[日本語PDFマニュアル](https://github.com/ytec-forge-commits/ytec-calendar/releases/download/v1.1.5/Koyomado.pdf)・[英語PDFマニュアル](https://github.com/ytec-forge-commits/ytec-calendar/releases/download/v1.1.5/Koyomado.en.pdf)を利用できます。配布先ごとの提供状況は[公式ページ](https://ytec.cloudfree.jp/forge/projects/koyomado/)でご確認ください。
 
 - 公式ページ: https://ytec.cloudfree.jp/forge/projects/koyomado/
 - Microsoft Store（推奨）: https://apps.microsoft.com/detail/9P6WFRBWG8X5
-- ポータブル版: https://ytec.cloudfree.jp/forge/downloads/koyomado/koyomado-v1.1.4-windows-portable.zip
+- ポータブル版: https://github.com/ytec-forge-commits/ytec-calendar/releases/download/v1.1.5/koyomado-v1.1.5-windows-portable.zip
 - 対応OS: Windows 10 / 11（64bit）
 - ライセンス: Apache License 2.0
 
@@ -42,7 +42,7 @@ Microsoft Store版とForgeのポータブル版1.1.4、更新済みの日英PDF�
 
 ## 初回の使い方
 
-1. 普段使いには[Microsoft Store版](https://apps.microsoft.com/detail/9P6WFRBWG8X5)をインストールします。持ち運んで使う場合は、[ポータブル版](https://ytec.cloudfree.jp/forge/downloads/koyomado/koyomado-v1.1.4-windows-portable.zip)のZIPを今後使う場所へ展開します。
+1. 普段使いには[Microsoft Store版](https://apps.microsoft.com/detail/9P6WFRBWG8X5)をインストールします。持ち運んで使う場合は、[ポータブル版](https://github.com/ytec-forge-commits/ytec-calendar/releases/download/v1.1.5/koyomado-v1.1.5-windows-portable.zip)のZIPを今後使う場所へ展開します。
 2. Store版はスタートメニュー、ポータブル版は`koyomado.exe`から起動します。
 3. 右上の歯車から、表示方法とWindows自動起動を好みに合わせて設定します。
 4. ウィンドウを好きな位置とサイズへ調整します。同じモニター構成では、次回からその位置で開きます。
@@ -191,7 +191,7 @@ Windows SDKのMakeAppxを使用します。Partner Centerで割り当てられ�
 
 ```powershell
 npm run tauri:build
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-msix.ps1 -SkipBuild -PackageVersion 1.1.4.0 -CreateUpload
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-msix.ps1 -SkipBuild -PackageVersion 1.1.5.0 -CreateUpload
 npm run test:store-submission
 ```
 

@@ -30,7 +30,7 @@ from reportlab.platypus import (
 ROOT = Path(__file__).resolve().parents[1]
 ASSET_DIR = ROOT / "docs" / "manual-assets"
 VERSION = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))["version"]
-RELEASE_DATE = "2026年10月29日（説明書更新）"
+RELEASE_DATE = "2026年11月25日（説明書更新）"
 OFFICIAL_URL = "https://ytec.cloudfree.jp/forge/projects/koyomado/"
 SOURCE_URL = "https://github.com/ytec-forge-commits/ytec-calendar"
 CONTACT_URL = "https://ytec.cloudfree.jp/forge/contact/"
