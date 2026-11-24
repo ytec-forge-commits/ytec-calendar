@@ -56,7 +56,7 @@ try {
         "CHANGELOG.en.md",
         "PRIVACY.en.md",
         "Koyomado-Manual.en.pdf",
-        "third_party\rust-backup\zip-9.0.4-LICENSE.txt",
+        "third_party\rust-backup\zip-9.0.5-LICENSE.txt",
         "LICENSE.txt",
         "NOTICE",
         "CHANGELOG.md",

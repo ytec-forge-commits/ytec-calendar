@@ -16,7 +16,7 @@ foreach ($manual in @('Koyomado操作説明書.pdf','Koyomado-Manual.en.pdf')) {
 foreach ($directory in @('docs','third_party/dependency-licenses','third_party/mpl-source','third_party/rust-backup')) {
     New-Item -ItemType Directory -Path (Join-Path $fixtureRoot $directory) -Force | Out-Null
 }
-foreach ($file in @('ASSET_PROVENANCE.md','docs/asset-manifest.json','third_party/dependency-licenses/index.json','third_party/mpl-source/index.json','third_party/rust-backup/zip-9.0.4-LICENSE.txt')) {
+foreach ($file in @('ASSET_PROVENANCE.md','docs/asset-manifest.json','third_party/dependency-licenses/index.json','third_party/mpl-source/index.json','third_party/rust-backup/zip-9.0.5-LICENSE.txt')) {
     'Synthetic provenance fixture' | Set-Content -LiteralPath (Join-Path $fixtureRoot $file)
 }
 Copy-Item -LiteralPath (Join-Path $fixtureRoot 'docs/Koyomado-Manual.en.pdf') -Destination (Join-Path $fixtureRoot 'docs/Koyomado.en.pdf')
